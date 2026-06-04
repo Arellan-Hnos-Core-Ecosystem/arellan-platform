@@ -4,9 +4,5 @@ export declare class HealthController {
     private readonly prisma;
     private readonly redis;
     constructor(prisma: PrismaService, redis: RedisService);
-    check(): Promise<{
-        postgres: string;
-        redis: string;
-        timestamp: string;
-    }>;
+    check(): Promise<Record<string, string>>;
 }

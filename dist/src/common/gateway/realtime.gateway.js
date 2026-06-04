@@ -135,11 +135,27 @@ let RealtimeGateway = class RealtimeGateway {
         return { success: true, eventId: `evt-${Date.now()}` };
     }
     handleSubscribe(client, data) {
-        client.join(`order:${data.orderId}`);
-        return { success: true, room: `order:${data.orderId}` };
+        let orderId;
+        if (!data) {
+            return { success: false, error: "orderId is required" };
+        }
+        if (typeof data === "string") {
+            orderId = data;
+        }
+        else if (typeof data === "object" && data !== null) {
+            orderId = data.orderId || data.id;
+        }
+        if (!orderId) {
+            return { success: false, error: "orderId is required" };
+        }
+        client.join(`order:${orderId}`);
+        return { success: true, room: `order:${orderId}` };
     }
     handleUnsubscribe(client, data) {
-        client.leave(`order:${data.orderId}`);
+        const orderId = typeof data === "string" ? data : data?.orderId || data?.id;
+        if (!orderId)
+            return { success: false, error: "orderId is required" };
+        client.leave(`order:${orderId}`);
         return { success: true };
     }
     handleMechanicProgress(_client, data) {
@@ -150,11 +166,17 @@ let RealtimeGateway = class RealtimeGateway {
         return { success: true, eventId: `progress-${Date.now()}` };
     }
     handleClientSubscribe(client, data) {
-        client.join(`client:${data.clientId}`);
-        return { success: true, room: `client:${data.clientId}` };
+        const clientId = typeof data === "string" ? data : data?.clientId || data?.id;
+        if (!clientId)
+            return { success: false, error: "clientId is required" };
+        client.join(`client:${clientId}`);
+        return { success: true, room: `client:${clientId}` };
     }
     handleClientUnsubscribe(client, data) {
-        client.leave(`client:${data.clientId}`);
+        const clientId = typeof data === "string" ? data : data?.clientId || data?.id;
+        if (!clientId)
+            return { success: false, error: "clientId is required" };
+        client.leave(`client:${clientId}`);
         return { success: true };
     }
     handleDashboardSubscribe(client) {

@@ -204,17 +204,7 @@ let OrdersService = OrdersService_1 = class OrdersService {
         }
         if (totalPaid < totalRequired) {
             const pending = totalRequired - totalPaid;
-            throw new common_1.ForbiddenException({
-                message: `No se puede entregar el vehiculo. Monto pendiente: S/ ${pending.toFixed(2)}`,
-                code: "DELIVERY_PAYMENT_MISMATCH",
-                details: {
-                    laborCost,
-                    partsCost,
-                    totalRequired,
-                    totalPaid,
-                    pending,
-                },
-            });
+            throw new common_1.BadRequestException(`No se puede entregar: existe un saldo pendiente de S/ ${pending.toFixed(2)}. Total requerido: S/ ${totalRequired.toFixed(2)}, Total pagado: S/ ${totalPaid.toFixed(2)}`);
         }
         const suspiciousYape = order.payments.some((p) => p.method === client_1.PaymentMethod.YAPE && Number(p.amount) >= 500);
         if (suspiciousYape) {
@@ -263,12 +253,20 @@ let OrdersService = OrdersService_1 = class OrdersService {
                 ...ORDER_INCLUDE,
                 parts: { include: { item: { select: { id: true, name: true, sku: true } } } },
                 photosRel: { select: { id: true, url: true, type: true } },
+                statusHistory: { orderBy: { timestamp: "desc" } },
             },
         });
         const hasMore = orders.length > limit;
         const data = hasMore ? orders.slice(0, limit) : orders;
         const nextCursor = hasMore ? data[data.length - 1].id : null;
-        return { data, nextCursor };
+        const flattened = data.map((o) => ({
+            ...o,
+            vehiclePlate: o.vehicle?.plate ?? null,
+            vehicleModel: o.vehicle?.model ?? null,
+            photos: o.photosRel ?? [],
+            timeline: o.statusHistory ?? [],
+        }));
+        return { data: flattened, nextCursor };
     }
     async getSummaryStats() {
         const today = new Date();
@@ -373,6 +371,37 @@ let OrdersService = OrdersService_1 = class OrdersService {
         });
         this.logger.log(`Descuento ${discountPct.toFixed(1)}% aplicado a OT ${order.number}`);
         return updated;
+    }
+    async uploadPhoto(orderId, photo, description) {
+        const order = await this.prisma.workOrder.findUnique({ where: { id: orderId } });
+        if (!order)
+            throw new common_1.NotFoundException("Orden de trabajo no encontrada");
+        const url = `data:${photo.mimetype};base64,${photo.buffer.toString("base64")}`;
+        const hash = require("crypto").createHash("md5").update(photo.buffer).digest("hex");
+        await this.prisma.workOrderPhoto.create({
+            data: {
+                orderId,
+                url,
+                type: photo.mimetype,
+                hash,
+            },
+        });
+        await this.prisma.workOrder.update({
+            where: { id: orderId },
+            data: { photos: { push: url } },
+        });
+        await this.prisma.workOrderEvent.create({
+            data: {
+                workOrderId: orderId,
+                event: "PHOTO_UPLOADED",
+                description: description
+                    ? `Foto cargada: ${description}`
+                    : "Foto del vehiculo cargada al sistema",
+                userId: order.createdBy,
+            },
+        });
+        this.logger.log(`Foto subida a OT ${order.number}`);
+        return { success: true, url };
     }
 };
 exports.OrdersService = OrdersService;

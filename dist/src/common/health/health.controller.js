@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.HealthController = void 0;
 const common_1 = require("@nestjs/common");
+const swagger_1 = require("@nestjs/swagger");
 const prisma_service_1 = require("../prisma/prisma.service");
 const redis_service_1 = require("../redis/redis.service");
 let HealthController = class HealthController {
@@ -21,11 +22,7 @@ let HealthController = class HealthController {
         this.redis = redis;
     }
     async check() {
-        const checks = {
-            postgres: "ok",
-            redis: "ok",
-            timestamp: new Date().toISOString(),
-        };
+        const checks = { postgres: "ok", redis: "ok", timestamp: new Date().toISOString() };
         try {
             await this.prisma.$queryRaw `SELECT 1`;
         }
@@ -44,13 +41,19 @@ let HealthController = class HealthController {
 exports.HealthController = HealthController;
 __decorate([
     (0, common_1.Get)(),
+    (0, swagger_1.ApiOperation)({
+        summary: "Health Check de servicios",
+        description: "Verifica el estado de PostgreSQL (SELECT 1) y Redis (PING). Retorna 'ok' o 'error' para cada servicio con timestamp.",
+    }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: "Estado de los servicios: postgres, redis, timestamp" }),
+    (0, swagger_1.ApiResponse)({ status: 503, description: "Uno o mas servicios no responden" }),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], HealthController.prototype, "check", null);
 exports.HealthController = HealthController = __decorate([
+    (0, swagger_1.ApiTags)("Health"),
     (0, common_1.Controller)("health"),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
-        redis_service_1.RedisService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService, redis_service_1.RedisService])
 ], HealthController);
 //# sourceMappingURL=health.controller.js.map

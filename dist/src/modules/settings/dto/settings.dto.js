@@ -11,11 +11,13 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UpdateSettingDto = exports.CreateSettingDto = exports.SettingFilterDto = void 0;
 const class_validator_1 = require("class-validator");
+const swagger_1 = require("@nestjs/swagger");
 class SettingFilterDto {
     category;
 }
 exports.SettingFilterDto = SettingFilterDto;
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ description: "Filtrar por categoria", example: "BUSINESS" }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
@@ -28,21 +30,25 @@ class CreateSettingDto {
 }
 exports.CreateSettingDto = CreateSettingDto;
 __decorate([
+    (0, swagger_1.ApiProperty)({ description: "Clave unica de configuracion", example: "shop_name" }),
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.IsNotEmpty)(),
     __metadata("design:type", String)
 ], CreateSettingDto.prototype, "key", void 0);
 __decorate([
+    (0, swagger_1.ApiProperty)({ description: "Valor de la configuracion", example: "Clinica Automotriz Arellan Hnos" }),
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.IsNotEmpty)(),
     __metadata("design:type", String)
 ], CreateSettingDto.prototype, "value", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ description: "Categoria: GENERAL, BUSINESS, NOTIFICATIONS", example: "GENERAL" }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreateSettingDto.prototype, "category", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ description: "Si es accesible sin autenticacion", example: false }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsBoolean)(),
     __metadata("design:type", Boolean)
@@ -55,21 +61,25 @@ class UpdateSettingDto {
 }
 exports.UpdateSettingDto = UpdateSettingDto;
 __decorate([
+    (0, swagger_1.ApiProperty)({ description: "Nuevo valor de la configuracion", example: "Nuevo valor" }),
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.IsNotEmpty)(),
     __metadata("design:type", String)
 ], UpdateSettingDto.prototype, "value", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ description: "ID del usuario que actualiza" }),
     (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsUUID)("4"),
+    (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], UpdateSettingDto.prototype, "userId", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ description: "Nueva categoria" }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], UpdateSettingDto.prototype, "category", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ description: "Cambiar visibilidad publica" }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsBoolean)(),
     __metadata("design:type", Boolean)

@@ -45,7 +45,7 @@ export declare class UpdatePersonnelDto {
 export declare class UpdateRoleDto {
     role: UserRole;
 }
-export declare class UpdateStatusDto {
+export declare class UpdateAccountStatusDto {
     status: AccountStatus;
 }
 export declare class AuthorizeVehicleUsageDto {

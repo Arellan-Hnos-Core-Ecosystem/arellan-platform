@@ -176,7 +176,7 @@ export class UpdateRoleDto {
   role: UserRole
 }
 
-export class UpdateStatusDto {
+export class UpdateAccountStatusDto {
   @IsEnum(AccountStatus, { message: "Estado invalido" })
   status: AccountStatus
 }

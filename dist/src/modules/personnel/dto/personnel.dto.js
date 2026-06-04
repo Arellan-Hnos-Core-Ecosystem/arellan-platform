@@ -9,7 +9,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CheckInOutDto = exports.AttendanceQueryDto = exports.AuthorizeVehicleUsageDto = exports.UpdateStatusDto = exports.UpdateRoleDto = exports.UpdatePersonnelDto = exports.CreatePersonnelDto = exports.PersonnelFilterDto = void 0;
+exports.CheckInOutDto = exports.AttendanceQueryDto = exports.AuthorizeVehicleUsageDto = exports.UpdateAccountStatusDto = exports.UpdateRoleDto = exports.UpdatePersonnelDto = exports.CreatePersonnelDto = exports.PersonnelFilterDto = void 0;
 const class_validator_1 = require("class-validator");
 const class_transformer_1 = require("class-transformer");
 const client_1 = require("@prisma/client");
@@ -256,14 +256,14 @@ __decorate([
     (0, class_validator_1.IsEnum)(client_1.UserRole, { message: "Rol invalido" }),
     __metadata("design:type", String)
 ], UpdateRoleDto.prototype, "role", void 0);
-class UpdateStatusDto {
+class UpdateAccountStatusDto {
     status;
 }
-exports.UpdateStatusDto = UpdateStatusDto;
+exports.UpdateAccountStatusDto = UpdateAccountStatusDto;
 __decorate([
     (0, class_validator_1.IsEnum)(client_1.AccountStatus, { message: "Estado invalido" }),
     __metadata("design:type", String)
-], UpdateStatusDto.prototype, "status", void 0);
+], UpdateAccountStatusDto.prototype, "status", void 0);
 class AuthorizeVehicleUsageDto {
     personnelId;
     vehicleId;

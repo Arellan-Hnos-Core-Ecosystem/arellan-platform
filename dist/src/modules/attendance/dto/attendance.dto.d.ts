@@ -20,8 +20,3 @@ export declare class VerifyAttendanceDto {
     date: string;
     verifiedBy: string;
 }
-export declare class PersonnelDateRangeDto {
-    personnelId: string;
-    from?: string;
-    to?: string;
-}

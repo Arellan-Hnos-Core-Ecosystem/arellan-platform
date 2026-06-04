@@ -277,33 +277,4 @@ export declare class FinanceController {
         })[];
         nextCursor: string | null;
     }>;
-    getCommissions(status?: string, personnelId?: string, page?: string, limit?: string): Promise<{
-        data: ({
-            personnel: {
-                firstName: string;
-                lastName: string;
-            };
-            supplier: {
-                name: string;
-            } | null;
-        } & {
-            id: string;
-            status: import(".prisma/client").$Enums.ApprovalStatus;
-            createdAt: Date;
-            notes: string | null;
-            type: string;
-            supplierId: string | null;
-            personnelId: string;
-            amount: import("@prisma/client/runtime/library").Decimal;
-            paidAt: Date | null;
-            purchaseId: string | null;
-            percentage: import("@prisma/client/runtime/library").Decimal | null;
-        })[];
-        meta: {
-            total: number;
-            page: number;
-            limit: number;
-            totalPages: number;
-        };
-    }>;
 }

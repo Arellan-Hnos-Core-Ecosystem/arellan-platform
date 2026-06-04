@@ -25,8 +25,3 @@ export declare class CreatePaymentDto {
 export declare class VerifyPaymentDto {
     verifierId: string;
 }
-export declare class MethodFilterDto {
-    method: PaymentMethod;
-    from: string;
-    to: string;
-}

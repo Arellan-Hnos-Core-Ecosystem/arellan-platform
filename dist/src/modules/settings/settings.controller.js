@@ -14,6 +14,7 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SettingsController = void 0;
 const common_1 = require("@nestjs/common");
+const swagger_1 = require("@nestjs/swagger");
 const settings_service_1 = require("./settings.service");
 const settings_dto_1 = require("./dto/settings.dto");
 const jwt_auth_guard_1 = require("../../common/guards/jwt-auth.guard");
@@ -26,33 +27,21 @@ let SettingsController = class SettingsController {
     constructor(settingsService) {
         this.settingsService = settingsService;
     }
-    getAll() {
-        return this.settingsService.getAll();
-    }
-    getByCategory(category) {
-        return this.settingsService.getByCategory(category);
-    }
-    get(key) {
-        return this.settingsService.get(key);
-    }
-    create(dto, user) {
-        return this.settingsService.create(dto.key, dto.value, dto.category, dto.isPublic, user.id);
-    }
-    update(key, dto, user) {
-        return this.settingsService.update(key, dto.value, user.id);
-    }
-    set(key, dto, user) {
-        return this.settingsService.set(key, dto.value, user.id);
-    }
-    delete(key) {
-        return this.settingsService.delete(key);
-    }
+    getAll() { return this.settingsService.getAll(); }
+    getByCategory(category) { return this.settingsService.getByCategory(category); }
+    get(key) { return this.settingsService.get(key); }
+    create(dto, user) { return this.settingsService.create(dto.key, dto.value, dto.category, dto.isPublic, user.id); }
+    update(key, dto, user) { return this.settingsService.update(key, dto.value, user.id); }
+    set(key, dto, user) { return this.settingsService.set(key, dto.value, user.id); }
+    delete(key) { return this.settingsService.delete(key); }
 };
 exports.SettingsController = SettingsController;
 __decorate([
     (0, common_1.Get)(),
     (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN, client_1.UserRole.OWNER),
     (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, swagger_1.ApiOperation)({ summary: "Listar todas las configuraciones", description: "Retorna todas las variables de configuracion del sistema." }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: "Lista de configuraciones" }),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
@@ -61,6 +50,9 @@ __decorate([
     (0, common_1.Get)("category/:category"),
     (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN, client_1.UserRole.OWNER),
     (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, swagger_1.ApiOperation)({ summary: "Configuraciones por categoria", description: "Filtra por categoria: GENERAL, BUSINESS, NOTIFICATIONS." }),
+    (0, swagger_1.ApiParam)({ name: "category", description: "Categoria de configuracion", example: "BUSINESS" }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: "Configuraciones de la categoria" }),
     __param(0, (0, common_1.Param)("category")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
@@ -70,6 +62,10 @@ __decorate([
     (0, common_1.Get)(":key"),
     (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN, client_1.UserRole.OWNER),
     (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, swagger_1.ApiOperation)({ summary: "Obtener configuracion por clave" }),
+    (0, swagger_1.ApiParam)({ name: "key", description: "Clave de configuracion", example: "shop_name" }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: "Valor de la configuracion" }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: "Configuracion no encontrada" }),
     __param(0, (0, common_1.Param)("key")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
@@ -79,6 +75,9 @@ __decorate([
     (0, common_1.Post)(),
     (0, roles_decorator_1.Roles)(client_1.UserRole.OWNER),
     (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, swagger_1.ApiOperation)({ summary: "Crear configuracion (OWNER)" }),
+    (0, swagger_1.ApiResponse)({ status: 201, description: "Configuracion creada" }),
+    (0, swagger_1.ApiResponse)({ status: 403, description: "Solo OWNER" }),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -89,6 +88,10 @@ __decorate([
     (0, common_1.Patch)(":key"),
     (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN, client_1.UserRole.OWNER),
     (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, swagger_1.ApiOperation)({ summary: "Actualizar configuracion" }),
+    (0, swagger_1.ApiParam)({ name: "key", description: "Clave de configuracion" }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: "Configuracion actualizada" }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: "Configuracion no encontrada" }),
     __param(0, (0, common_1.Param)("key")),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -100,6 +103,9 @@ __decorate([
     (0, common_1.Post)(":key"),
     (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN, client_1.UserRole.OWNER),
     (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, swagger_1.ApiOperation)({ summary: "Establecer valor de configuracion (upsert)" }),
+    (0, swagger_1.ApiParam)({ name: "key", description: "Clave de configuracion" }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: "Configuracion establecida" }),
     __param(0, (0, common_1.Param)("key")),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -111,14 +117,20 @@ __decorate([
     (0, common_1.Delete)(":key"),
     (0, roles_decorator_1.Roles)(client_1.UserRole.OWNER),
     (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, swagger_1.ApiOperation)({ summary: "Eliminar configuracion (OWNER)" }),
+    (0, swagger_1.ApiParam)({ name: "key", description: "Clave de configuracion" }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: "Configuracion eliminada" }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: "Configuracion no encontrada" }),
     __param(0, (0, common_1.Param)("key")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", void 0)
 ], SettingsController.prototype, "delete", null);
 exports.SettingsController = SettingsController = __decorate([
+    (0, swagger_1.ApiTags)("Settings"),
     (0, common_1.Controller)("settings"),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiBearerAuth)("access-token"),
     __metadata("design:paramtypes", [settings_service_1.SettingsService])
 ], SettingsController);
 //# sourceMappingURL=settings.controller.js.map

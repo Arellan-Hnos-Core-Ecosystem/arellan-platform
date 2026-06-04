@@ -1,6 +1,6 @@
 import { PersonnelService } from "./personnel.service";
 import { AuthUser } from "../auth/auth.service";
-import { PersonnelFilterDto, UpdateRoleDto, UpdateStatusDto, CheckInOutDto, AuthorizeVehicleUsageDto } from "./dto/personnel.dto";
+import { PersonnelFilterDto, UpdateRoleDto, UpdateAccountStatusDto, CheckInOutDto, AuthorizeVehicleUsageDto } from "./dto/personnel.dto";
 export declare class PersonnelController {
     private readonly personnelService;
     constructor(personnelService: PersonnelService);
@@ -120,7 +120,7 @@ export declare class PersonnelController {
         name: string;
         status: import(".prisma/client").$Enums.AccountStatus;
     }>;
-    updateStatus(id: string, dto: UpdateStatusDto): Promise<{
+    updateStatus(id: string, dto: UpdateAccountStatusDto): Promise<{
         id: string;
         email: string;
         role: import(".prisma/client").$Enums.UserRole;

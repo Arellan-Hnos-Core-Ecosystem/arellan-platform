@@ -102,31 +102,41 @@ export declare class RealtimeGateway implements OnGatewayInit, OnGatewayConnecti
         success: boolean;
         eventId: string;
     };
-    handleSubscribe(client: Socket, data: {
-        orderId: string;
-    }): {
+    handleSubscribe(client: Socket, data: unknown): {
+        success: boolean;
+        error: string;
+        room?: undefined;
+    } | {
         success: boolean;
         room: string;
+        error?: undefined;
     };
-    handleUnsubscribe(client: Socket, data: {
-        orderId: string;
-    }): {
+    handleUnsubscribe(client: Socket, data: unknown): {
         success: boolean;
+        error: string;
+    } | {
+        success: boolean;
+        error?: undefined;
     };
     handleMechanicProgress(_client: Socket, data: MechanicProgressPayload): {
         success: boolean;
         eventId: string;
     };
-    handleClientSubscribe(client: Socket, data: {
-        clientId: string;
-    }): {
+    handleClientSubscribe(client: Socket, data: unknown): {
+        success: boolean;
+        error: string;
+        room?: undefined;
+    } | {
         success: boolean;
         room: string;
+        error?: undefined;
     };
-    handleClientUnsubscribe(client: Socket, data: {
-        clientId: string;
-    }): {
+    handleClientUnsubscribe(client: Socket, data: unknown): {
         success: boolean;
+        error: string;
+    } | {
+        success: boolean;
+        error?: undefined;
     };
     handleDashboardSubscribe(client: Socket): {
         success: boolean;

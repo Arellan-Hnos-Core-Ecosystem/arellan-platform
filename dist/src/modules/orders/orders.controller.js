@@ -14,6 +14,8 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.OrdersController = void 0;
 const common_1 = require("@nestjs/common");
+const platform_express_1 = require("@nestjs/platform-express");
+const swagger_1 = require("@nestjs/swagger");
 const orders_service_1 = require("./orders.service");
 const orders_dto_1 = require("./dto/orders.dto");
 const jwt_auth_guard_1 = require("../../common/guards/jwt-auth.guard");
@@ -56,10 +58,19 @@ let OrdersController = class OrdersController {
     applyDiscount(orderId, dto, user) {
         return this.ordersService.applyDiscount(orderId, dto, user.id, user.role);
     }
+    async uploadPhoto(id, photo, description) {
+        return this.ordersService.uploadPhoto(id, photo, description);
+    }
 };
 exports.OrdersController = OrdersController;
 __decorate([
     (0, common_1.Get)(),
+    (0, swagger_1.ApiOperation)({
+        summary: "Listar ordenes de trabajo",
+        description: "Listado paginado de todas las OT con filtros por estado, mecanico, rango de fechas, cursor. Incluye datos de vehiculo, cliente y mecanico asignado.",
+    }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: "Listado paginado de ordenes" }),
+    (0, swagger_1.ApiResponse)({ status: 401, description: "JWT invalido o expirado" }),
     __param(0, (0, common_1.Query)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [orders_dto_1.OrderFilterDto]),
@@ -69,6 +80,13 @@ __decorate([
     (0, common_1.Get)("my"),
     (0, roles_decorator_1.Roles)(client_1.UserRole.MECHANIC),
     (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, swagger_1.ApiOperation)({
+        summary: "Listar mis ordenes asignadas (mecanico)",
+        description: "Retorna las OT asignadas al mecanico autenticado (via JWT). Incluye repuestos consumidos y fotos. Usado por la tablet del taller (arellan-mechanic-ui).",
+    }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: "Listado de OT del mecanico" }),
+    (0, swagger_1.ApiResponse)({ status: 401, description: "JWT invalido" }),
+    (0, swagger_1.ApiResponse)({ status: 403, description: "Solo rol MECHANIC" }),
     __param(0, (0, current_user_decorator_1.CurrentUser)()),
     __param(1, (0, common_1.Query)()),
     __metadata("design:type", Function),
@@ -77,12 +95,25 @@ __decorate([
 ], OrdersController.prototype, "findMyOrders", null);
 __decorate([
     (0, common_1.Get)("stats/summary"),
+    (0, swagger_1.ApiOperation)({
+        summary: "Estadisticas resumidas del taller",
+        description: "KPIs: ordenes activas, recibidas hoy, completadas hoy, entregadas hoy, total historico, pendientes de pago, ingresos del dia, items con stock critico.",
+    }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: "Resumen de estadisticas" }),
+    (0, swagger_1.ApiResponse)({ status: 401, description: "JWT invalido" }),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], OrdersController.prototype, "getSummaryStats", null);
 __decorate([
     (0, common_1.Get)("by-status/:status"),
+    (0, swagger_1.ApiOperation)({
+        summary: "Filtrar ordenes por estado",
+        description: "Atajo para listar ordenes filtradas exclusivamente por su estado actual en el flujo de trabajo.",
+    }),
+    (0, swagger_1.ApiParam)({ name: "status", description: "Estado de orden: RECEIVED, IN_DIAGNOSIS, BUDGETED, IN_PROGRESS, IN_REVIEW, READY, DELIVERED, CANCELLED", example: "IN_PROGRESS" }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: "Ordenes filtradas por estado" }),
+    (0, swagger_1.ApiResponse)({ status: 401, description: "JWT invalido" }),
     __param(0, (0, common_1.Param)("status")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
@@ -90,6 +121,11 @@ __decorate([
 ], OrdersController.prototype, "findByStatus", null);
 __decorate([
     (0, common_1.Get)(":id"),
+    (0, swagger_1.ApiOperation)({ summary: "Obtener detalle de una orden", description: "Retorna la OT completa con partes, fotos, historial de estados, pagos asociados y datos del vehiculo/cliente/mecanico." }),
+    (0, swagger_1.ApiParam)({ name: "id", description: "ID de la orden de trabajo (UUID v4)", example: "550e8400-e29b-41d4-a716-446655440000" }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: "Detalle completo de la OT" }),
+    (0, swagger_1.ApiResponse)({ status: 401, description: "JWT invalido" }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: "Orden no encontrada" }),
     __param(0, (0, common_1.Param)("id")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
@@ -99,6 +135,14 @@ __decorate([
     (0, common_1.Post)(),
     (0, roles_decorator_1.Roles)(client_1.UserRole.OWNER, client_1.UserRole.ADMIN),
     (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, swagger_1.ApiOperation)({
+        summary: "Crear nueva orden de trabajo",
+        description: "Registra una OT con numero autoincremental (OT-AAAA-NNNN). Asigna vehiculo, cliente y mecanico. Emite evento WebSocket order:created al dashboard gerencial.",
+    }),
+    (0, swagger_1.ApiResponse)({ status: 201, description: "OT creada exitosamente" }),
+    (0, swagger_1.ApiResponse)({ status: 400, description: "Datos invalidos" }),
+    (0, swagger_1.ApiResponse)({ status: 401, description: "JWT invalido" }),
+    (0, swagger_1.ApiResponse)({ status: 403, description: "Solo OWNER o ADMIN" }),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -107,8 +151,16 @@ __decorate([
 ], OrdersController.prototype, "create", null);
 __decorate([
     (0, common_1.Patch)(":id"),
-    (0, roles_decorator_1.Roles)(client_1.UserRole.OWNER, client_1.UserRole.ADMIN),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.OWNER, client_1.UserRole.ADMIN, client_1.UserRole.MECHANIC, client_1.UserRole.TRAINEE),
     (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, swagger_1.ApiOperation)({ summary: "Actualizar datos de una orden", description: "Modifica diagnostico, costos de mano de obra/repuestos, y fecha estimada de entrega. Recalcula totalCost automaticamente." }),
+    (0, swagger_1.ApiParam)({ name: "id", description: "ID de la OT (UUID v4)" }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: "OT actualizada" }),
+    (0, swagger_1.ApiResponse)({ status: 400, description: "Datos invalidos" }),
+    (0, swagger_1.ApiResponse)({ status: 401, description: "JWT invalido" }),
+    (0, swagger_1.ApiResponse)({ status: 403, description: "Solo OWNER o ADMIN" }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: "OT no encontrada" }),
+    (0, swagger_1.ApiResponse)({ status: 422, description: "No se puede modificar una OT cancelada" }),
     __param(0, (0, common_1.Param)("id")),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -117,8 +169,18 @@ __decorate([
 ], OrdersController.prototype, "update", null);
 __decorate([
     (0, common_1.Post)(":id/status"),
-    (0, roles_decorator_1.Roles)(client_1.UserRole.MECHANIC, client_1.UserRole.ADMIN),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.MECHANIC, client_1.UserRole.TRAINEE, client_1.UserRole.ADMIN, client_1.UserRole.OWNER),
     (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, swagger_1.ApiOperation)({
+        summary: "Transicionar estado de la orden",
+        description: "Cambia el estado segun la maquina de estados valida. Al transicionar a DELIVERED valida que laborCost + partsCost == totalPaid (regla antifraude). Emite WebSocket order:status_changed. Alerta si pago Yape >= S/500.",
+    }),
+    (0, swagger_1.ApiParam)({ name: "id", description: "ID de la OT (UUID v4)" }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: "Estado actualizado + evento WebSocket emitido" }),
+    (0, swagger_1.ApiResponse)({ status: 400, description: "Transicion invalida segun flujo de trabajo" }),
+    (0, swagger_1.ApiResponse)({ status: 401, description: "JWT invalido" }),
+    (0, swagger_1.ApiResponse)({ status: 403, description: "Solo MECHANIC o ADMIN; DELIVERED bloqueado si pago insuficiente" }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: "OT no encontrada" }),
     __param(0, (0, common_1.Param)("id")),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -130,6 +192,13 @@ __decorate([
     (0, common_1.Delete)(":id"),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
     (0, roles_decorator_1.Roles)(client_1.UserRole.OWNER),
+    (0, swagger_1.ApiOperation)({ summary: "Cancelar orden (soft delete)", description: "Marca la OT como CANCELLED. Solo OWNER. No elimina fisicamente el registro." }),
+    (0, swagger_1.ApiParam)({ name: "id", description: "ID de la OT (UUID v4)" }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: "OT cancelada" }),
+    (0, swagger_1.ApiResponse)({ status: 401, description: "JWT invalido" }),
+    (0, swagger_1.ApiResponse)({ status: 403, description: "Solo OWNER" }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: "OT no encontrada" }),
+    (0, swagger_1.ApiResponse)({ status: 422, description: "OT ya estaba cancelada" }),
     __param(0, (0, common_1.Param)("id")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
@@ -139,6 +208,14 @@ __decorate([
     (0, common_1.Post)(":id/discount"),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
     (0, roles_decorator_1.Roles)(client_1.UserRole.OWNER, client_1.UserRole.ADMIN, client_1.UserRole.MECHANIC),
+    (0, swagger_1.ApiOperation)({
+        summary: "Aplicar descuento a una orden",
+        description: "Aplica descuento por monto fijo o porcentaje. Si el descuento supera el 20% del total, se requiere aprobacion de OWNER via flujo de aprobaciones.",
+    }),
+    (0, swagger_1.ApiParam)({ name: "id", description: "ID de la OT (UUID v4)" }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: "Descuento aplicado" }),
+    (0, swagger_1.ApiResponse)({ status: 202, description: "Descuento pendiente de aprobacion OWNER (>20%)" }),
+    (0, swagger_1.ApiResponse)({ status: 401, description: "JWT invalido" }),
     __param(0, (0, common_1.Param)("id")),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -146,9 +223,32 @@ __decorate([
     __metadata("design:paramtypes", [String, orders_dto_1.ApplyDiscountDto, Object]),
     __metadata("design:returntype", void 0)
 ], OrdersController.prototype, "applyDiscount", null);
+__decorate([
+    (0, common_1.Post)(":id/photos"),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.MECHANIC, client_1.UserRole.TRAINEE, client_1.UserRole.ADMIN, client_1.UserRole.OWNER),
+    (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)("photo")),
+    (0, swagger_1.ApiOperation)({
+        summary: "Subir foto a una orden de trabajo",
+        description: "Adjunta una imagen (JPEG/PNG) a la OT. Usado por mecanicos desde la tablet para documentar el estado del vehiculo. Invalida cache de ordenes.",
+    }),
+    (0, swagger_1.ApiConsumes)("multipart/form-data"),
+    (0, swagger_1.ApiBody)({ schema: { type: "object", properties: { photo: { type: "string", format: "binary", description: "Archivo de imagen" }, description: { type: "string", example: "Filtro de aceite danado" } } } }),
+    (0, swagger_1.ApiParam)({ name: "id", description: "ID de la OT (UUID v4)" }),
+    (0, swagger_1.ApiResponse)({ status: 201, description: "Foto subida y vinculada a la OT" }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: "OT no encontrada" }),
+    __param(0, (0, common_1.Param)("id")),
+    __param(1, (0, common_1.UploadedFile)()),
+    __param(2, (0, common_1.Body)("description")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object, String]),
+    __metadata("design:returntype", Promise)
+], OrdersController.prototype, "uploadPhoto", null);
 exports.OrdersController = OrdersController = __decorate([
+    (0, swagger_1.ApiTags)("Orders"),
     (0, common_1.Controller)("orders"),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiBearerAuth)("access-token"),
     __metadata("design:paramtypes", [orders_service_1.OrdersService])
 ], OrdersController);
 //# sourceMappingURL=orders.controller.js.map

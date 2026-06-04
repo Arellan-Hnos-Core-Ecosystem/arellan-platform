@@ -254,18 +254,36 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
   @SubscribeMessage("order:subscribe")
   handleSubscribe(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { orderId: string },
+    @MessageBody() data: unknown,
   ) {
-    client.join(`order:${data.orderId}`)
-    return { success: true, room: `order:${data.orderId}` }
+    let orderId: string | undefined
+
+    if (!data) {
+      return { success: false, error: "orderId is required" }
+    }
+
+    if (typeof data === "string") {
+      orderId = data
+    } else if (typeof data === "object" && data !== null) {
+      orderId = (data as any).orderId || (data as any).id
+    }
+
+    if (!orderId) {
+      return { success: false, error: "orderId is required" }
+    }
+
+    client.join(`order:${orderId}`)
+    return { success: true, room: `order:${orderId}` }
   }
 
   @SubscribeMessage("order:unsubscribe")
   handleUnsubscribe(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { orderId: string },
+    @MessageBody() data: unknown,
   ) {
-    client.leave(`order:${data.orderId}`)
+    const orderId = typeof data === "string" ? data : (data as any)?.orderId || (data as any)?.id
+    if (!orderId) return { success: false, error: "orderId is required" }
+    client.leave(`order:${orderId}`)
     return { success: true }
   }
 
@@ -284,18 +302,22 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
   @SubscribeMessage("client:subscribe")
   handleClientSubscribe(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { clientId: string },
+    @MessageBody() data: unknown,
   ) {
-    client.join(`client:${data.clientId}`)
-    return { success: true, room: `client:${data.clientId}` }
+    const clientId = typeof data === "string" ? data : (data as any)?.clientId || (data as any)?.id
+    if (!clientId) return { success: false, error: "clientId is required" }
+    client.join(`client:${clientId}`)
+    return { success: true, room: `client:${clientId}` }
   }
 
   @SubscribeMessage("client:unsubscribe")
   handleClientUnsubscribe(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { clientId: string },
+    @MessageBody() data: unknown,
   ) {
-    client.leave(`client:${data.clientId}`)
+    const clientId = typeof data === "string" ? data : (data as any)?.clientId || (data as any)?.id
+    if (!clientId) return { success: false, error: "clientId is required" }
+    client.leave(`client:${clientId}`)
     return { success: true }
   }
 
