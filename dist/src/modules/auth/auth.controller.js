@@ -26,8 +26,15 @@ let AuthController = class AuthController {
     constructor(authService) {
         this.authService = authService;
     }
-    login(dto) {
-        return this.authService.login(dto);
+    login(dto, req) {
+        const ip = req.ip || req.socket?.remoteAddress || "unknown";
+        const userAgent = req.headers?.["user-agent"];
+        return this.authService.login(dto, ip, userAgent);
+    }
+    mechanicLogin(dto, req) {
+        const ip = req.ip || req.socket?.remoteAddress || "unknown";
+        const userAgent = req.headers?.["user-agent"];
+        return this.authService.mechanicLogin(dto.pin, ip, userAgent);
     }
     verifyMfa(dto) {
         return this.authService.verifyMfa(dto);
@@ -44,8 +51,20 @@ let AuthController = class AuthController {
     refreshToken(refreshToken) {
         return this.authService.refreshToken(refreshToken);
     }
+    logoutWithAccessToken(user) {
+        return this.authService.logoutAll(user.id);
+    }
     logout(refreshToken) {
         return this.authService.logout(refreshToken);
+    }
+    logoutAll(user) {
+        return this.authService.logoutAll(user.id);
+    }
+    getSessions(user) {
+        return this.authService.getSessions(user.id);
+    }
+    revokeSession(sessionId, user) {
+        return this.authService.revokeSession(sessionId, user.id);
     }
     forceLogout(dto, user) {
         return this.authService.forceLogoutUser(dto.userId, user.id);
@@ -61,10 +80,19 @@ exports.AuthController = AuthController;
 __decorate([
     (0, common_1.Post)("login"),
     __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [auth_dto_1.LoginDto]),
+    __metadata("design:paramtypes", [auth_dto_1.LoginDto, Object]),
     __metadata("design:returntype", void 0)
 ], AuthController.prototype, "login", null);
+__decorate([
+    (0, common_1.Post)("mechanic/login"),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [auth_dto_1.MechanicLoginDto, Object]),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "mechanicLogin", null);
 __decorate([
     (0, common_1.Post)("mfa/verify"),
     __param(0, (0, common_1.Body)()),
@@ -106,12 +134,46 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], AuthController.prototype, "refreshToken", null);
 __decorate([
+    (0, common_1.Post)("logout"),
+    (0, common_1.HttpCode)(200),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    __param(0, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "logoutWithAccessToken", null);
+__decorate([
     (0, common_1.Delete)("logout"),
     __param(0, (0, common_1.Body)("refreshToken")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", void 0)
 ], AuthController.prototype, "logout", null);
+__decorate([
+    (0, common_1.Post)("logout-all"),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    __param(0, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "logoutAll", null);
+__decorate([
+    (0, common_1.Get)("sessions"),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    __param(0, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "getSessions", null);
+__decorate([
+    (0, common_1.Delete)("sessions/:id"),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    __param(0, (0, common_1.Param)("id")),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "revokeSession", null);
 __decorate([
     (0, common_1.Post)("force-logout"),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),

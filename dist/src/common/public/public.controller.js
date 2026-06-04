@@ -109,6 +109,33 @@ let PublicController = class PublicController {
             },
         };
     }
+    async getOrderByNumber(orderNumber) {
+        const order = await this.prisma.workOrder.findUnique({
+            where: { number: orderNumber.toUpperCase().trim() },
+            select: {
+                number: true,
+                status: true,
+                description: true,
+                receivedAt: true,
+                estimatedDelivery: true,
+                deliveredAt: true,
+                vehicle: {
+                    select: { plate: true, brand: true, model: true, year: true, color: true },
+                },
+                client: {
+                    select: { firstName: true },
+                },
+                statusHistory: {
+                    select: { status: true, timestamp: true },
+                    orderBy: { timestamp: "asc" },
+                },
+            },
+        });
+        if (!order) {
+            return { found: false, message: "Orden de trabajo no encontrada" };
+        }
+        return { found: true, order };
+    }
 };
 exports.PublicController = PublicController;
 __decorate([
@@ -126,6 +153,13 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], PublicController.prototype, "getOrder", null);
+__decorate([
+    (0, common_1.Get)("orders/number/:orderNumber/status"),
+    __param(0, (0, common_1.Param)("orderNumber")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], PublicController.prototype, "getOrderByNumber", null);
 exports.PublicController = PublicController = __decorate([
     (0, common_1.Controller)("public"),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService])

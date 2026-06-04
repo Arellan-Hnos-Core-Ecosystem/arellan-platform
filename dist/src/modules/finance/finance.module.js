@@ -10,13 +10,24 @@ exports.FinanceModule = void 0;
 const common_1 = require("@nestjs/common");
 const finance_controller_1 = require("./finance.controller");
 const finance_service_1 = require("./finance.service");
+const cache_manager_service_1 = require("../../common/cache/cache-manager.service");
 let FinanceModule = class FinanceModule {
 };
 exports.FinanceModule = FinanceModule;
 exports.FinanceModule = FinanceModule = __decorate([
     (0, common_1.Module)({
         controllers: [finance_controller_1.FinanceController],
-        providers: [finance_service_1.FinanceService],
+        providers: [
+            finance_service_1.FinanceService,
+            {
+                provide: "FINANCE_CACHE",
+                useFactory: (cacheManager) => ({
+                    wrap: (key, factory, ttl) => cacheManager.wrap(key, factory, { ttl: ttl ?? 30, prefix: "finance" }),
+                    invalidate: (pattern) => cacheManager.invalidatePattern(pattern),
+                }),
+                inject: [cache_manager_service_1.CacheManagerService],
+            },
+        ],
         exports: [finance_service_1.FinanceService],
     })
 ], FinanceModule);

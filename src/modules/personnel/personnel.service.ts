@@ -400,7 +400,7 @@ export class PersonnelService {
       throw new NotFoundException("Vehiculo no encontrado")
     }
 
-    if (![UserRole.OWNER, UserRole.ADMIN].includes(requestingUserRole)) {
+    if (!( [UserRole.OWNER, UserRole.ADMIN] as UserRole[] ).includes(requestingUserRole)) {
       throw new ForbiddenException("Solo OWNER o ADMIN pueden autorizar uso de vehiculos")
     }
 
@@ -580,6 +580,32 @@ export class PersonnelService {
 
     this.logger.log(`Estado de ${updated.email} cambiado a ${status}`)
     return updated
+  }
+
+  async checkInByUser(userId: string, notes?: string) {
+    const personnel = await this.prisma.personnel.findUnique({ where: { accountId: userId } })
+    if (!personnel) throw new NotFoundException("Personal no encontrado para este usuario")
+    return this.checkIn(personnel.id)
+  }
+
+  async checkOutByUser(userId: string, notes?: string) {
+    const personnel = await this.prisma.personnel.findUnique({ where: { accountId: userId } })
+    if (!personnel) throw new NotFoundException("Personal no encontrado para este usuario")
+    return this.checkOut(personnel.id)
+  }
+
+  async getOverdueVehicleUsages() {
+    return this.prisma.vehicleUsage.findMany({
+      where: {
+        status: "PENDING_RETURN",
+        expectedReturn: { lt: new Date() },
+      },
+      include: {
+        vehicle: true,
+        personnel: { select: { id: true, firstName: true, lastName: true } },
+      },
+      orderBy: { expectedReturn: "asc" },
+    })
   }
 
   async getAllSecurityList(requestingUserRole: UserRole) {

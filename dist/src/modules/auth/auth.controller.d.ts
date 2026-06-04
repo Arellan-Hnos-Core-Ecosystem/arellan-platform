@@ -1,9 +1,9 @@
 import { AuthService, AuthUser } from "./auth.service";
-import { LoginDto, MfaVerifyDto, RegisterDto, ChangePasswordDto, ForceLogoutDto } from "./dto/auth.dto";
+import { LoginDto, MfaVerifyDto, RegisterDto, ChangePasswordDto, ForceLogoutDto, MechanicLoginDto } from "./dto/auth.dto";
 export declare class AuthController {
     private readonly authService;
     constructor(authService: AuthService);
-    login(dto: LoginDto): Promise<{
+    login(dto: LoginDto, req: any): Promise<{
         accessToken: string;
         refreshToken: string;
         user: {
@@ -17,6 +17,17 @@ export declare class AuthController {
         mfaPending: boolean;
         sessionToken: string;
         message: string;
+    }>;
+    mechanicLogin(dto: MechanicLoginDto, req: any): Promise<{
+        accessToken: string;
+        refreshToken: string;
+        user: {
+            id: string;
+            email: string;
+            name: string;
+            role: import(".prisma/client").$Enums.UserRole;
+            mfaEnabled: boolean;
+        };
     }>;
     verifyMfa(dto: MfaVerifyDto): Promise<{
         accessToken: string;
@@ -53,7 +64,24 @@ export declare class AuthController {
             mfaEnabled: boolean;
         };
     }>;
+    logoutWithAccessToken(user: AuthUser): Promise<{
+        message: string;
+    }>;
     logout(refreshToken: string): Promise<{
+        message: string;
+    }>;
+    logoutAll(user: AuthUser): Promise<{
+        message: string;
+    }>;
+    getSessions(user: AuthUser): Promise<{
+        id: string;
+        createdAt: Date;
+        token: string;
+        ipAddress: string | null;
+        expiresAt: Date;
+        deviceInfo: string | null;
+    }[]>;
+    revokeSession(sessionId: string, user: AuthUser): Promise<{
         message: string;
     }>;
     forceLogout(dto: ForceLogoutDto, user: AuthUser): Promise<{

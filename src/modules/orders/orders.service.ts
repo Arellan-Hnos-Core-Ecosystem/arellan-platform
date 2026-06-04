@@ -1,8 +1,8 @@
-import { Injectable, NotFoundException, ConflictException, Logger } from "@nestjs/common"
+import { Injectable, NotFoundException, ConflictException, Logger, ForbiddenException } from "@nestjs/common"
 import { PrismaService } from "../../common/prisma/prisma.service"
-import { OrderStatus, Prisma } from "@prisma/client"
-import { CreateOrderDto, UpdateOrderDto, UpdateStatusDto, OrderFilterDto, PaginatedResult } from "./dto/orders.dto"
-import { OrdersGateway } from "../../gateways/orders.gateway"
+import { OrderStatus, Prisma, PaymentMethod, UserRole, ApprovalType, ApprovalStatus } from "@prisma/client"
+import { CreateOrderDto, UpdateOrderDto, UpdateStatusDto, OrderFilterDto, PaginatedResult, ApplyDiscountDto } from "./dto/orders.dto"
+import { RealtimeGateway } from "../../common/gateway/realtime.gateway"
 
 const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   RECEIVED: [OrderStatus.IN_DIAGNOSIS, OrderStatus.CANCELLED],
@@ -29,10 +29,10 @@ export class OrdersService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly wsGateway: OrdersGateway,
+    private readonly wsGateway: RealtimeGateway,
   ) {}
 
-  async create(dto: CreateOrderDto) {
+  async create(dto: CreateOrderDto, userId: string) {
     const year = new Date().getFullYear()
     const count = await this.prisma.workOrder.count({
       where: { number: { startsWith: `OT-${year}-` } },
@@ -47,8 +47,16 @@ export class OrdersService {
         clientId: dto.clientId,
         mechanicId: dto.mechanicId,
         description: dto.description,
+        createdBy: userId,
       },
       include: ORDER_INCLUDE,
+    })
+
+    this.wsGateway.emitOrderCreated({
+      orderId: order.id,
+      orderNumber: order.number,
+      clientName: order.client.firstName,
+      vehiclePlate: order.vehicle.plate,
     })
 
     this.logger.log(`OT ${number} creada`)
@@ -59,13 +67,8 @@ export class OrdersService {
     const { status, mechanicId, from, to, limit = 20, cursor } = filters
 
     const where: Prisma.WorkOrderWhereInput = {}
-
-    if (status) {
-      where.status = status
-    }
-    if (mechanicId) {
-      where.mechanicId = mechanicId
-    }
+    if (status) where.status = status
+    if (mechanicId) where.mechanicId = mechanicId
     if (from || to) {
       where.receivedAt = {}
       if (from) where.receivedAt.gte = new Date(from)
@@ -73,7 +76,6 @@ export class OrdersService {
     }
 
     const take = limit + 1
-
     const orders = await this.prisma.workOrder.findMany({
       where,
       take,
@@ -94,46 +96,29 @@ export class OrdersService {
       where: { id },
       include: {
         ...ORDER_INCLUDE,
-        photos: true,
         parts: { include: { item: true } },
         statusHistory: { orderBy: { timestamp: "desc" } },
+        payments: { select: { id: true, method: true, amount: true, paidAt: true } },
       },
     })
 
-    if (!order) {
-      throw new NotFoundException("Orden de trabajo no encontrada")
-    }
-
+    if (!order) throw new NotFoundException("Orden de trabajo no encontrada")
     return order
   }
 
   async update(id: string, dto: UpdateOrderDto) {
     const order = await this.prisma.workOrder.findUnique({ where: { id } })
-    if (!order) {
-      throw new NotFoundException("Orden de trabajo no encontrada")
-    }
-
+    if (!order) throw new NotFoundException("Orden de trabajo no encontrada")
     if (dto.status && order.status === OrderStatus.CANCELLED) {
       throw new ConflictException("No se puede modificar una orden cancelada")
     }
 
     const data: Prisma.WorkOrderUpdateInput = {}
-
-    if (dto.status !== undefined) {
-      data.status = dto.status
-    }
-    if (dto.diagnosis !== undefined) {
-      data.diagnosis = dto.diagnosis
-    }
-    if (dto.laborCost !== undefined) {
-      data.laborCost = new Prisma.Decimal(dto.laborCost)
-    }
-    if (dto.partsCost !== undefined) {
-      data.partsCost = new Prisma.Decimal(dto.partsCost)
-    }
-    if (dto.estimatedDelivery !== undefined) {
-      data.estimatedDelivery = new Date(dto.estimatedDelivery)
-    }
+    if (dto.status !== undefined) data.status = dto.status
+    if (dto.diagnosis !== undefined) data.diagnosis = dto.diagnosis
+    if (dto.laborCost !== undefined) data.laborCost = new Prisma.Decimal(dto.laborCost)
+    if (dto.partsCost !== undefined) data.partsCost = new Prisma.Decimal(dto.partsCost)
+    if (dto.estimatedDelivery !== undefined) data.estimatedDelivery = new Date(dto.estimatedDelivery)
 
     if (dto.laborCost !== undefined || dto.partsCost !== undefined) {
       const currentLabor = dto.laborCost !== undefined ? new Prisma.Decimal(dto.laborCost) : order.laborCost ?? new Prisma.Decimal(0)
@@ -153,9 +138,7 @@ export class OrdersService {
 
   async updateStatus(id: string, dto: UpdateStatusDto, userId: string) {
     const order = await this.prisma.workOrder.findUnique({ where: { id } })
-    if (!order) {
-      throw new NotFoundException("Orden de trabajo no encontrada")
-    }
+    if (!order) throw new NotFoundException("Orden de trabajo no encontrada")
 
     const allowed = VALID_TRANSITIONS[order.status]
     if (!allowed.includes(dto.status)) {
@@ -165,16 +148,17 @@ export class OrdersService {
       )
     }
 
+    if (dto.status === OrderStatus.DELIVERED) {
+      await this.validateVehicleDelivery(id)
+    }
+
     const vehicle = await this.prisma.vehicle.findUnique({
       where: { id: order.vehicleId },
       select: { plate: true },
     })
 
     const updateData: Prisma.WorkOrderUpdateInput = { status: dto.status }
-
-    if (dto.status === OrderStatus.DELIVERED) {
-      updateData.deliveredAt = new Date()
-    }
+    if (dto.status === OrderStatus.DELIVERED) updateData.deliveredAt = new Date()
 
     const [updated] = await this.prisma.$transaction([
       this.prisma.workOrder.update({
@@ -183,19 +167,22 @@ export class OrdersService {
         include: ORDER_INCLUDE,
       }),
       this.prisma.orderStatusHistory.create({
-        data: {
-          orderId: id,
-          status: dto.status,
-          changedBy: userId,
-        },
+        data: { orderId: id, status: dto.status, changedBy: userId },
       }),
     ])
 
+    this.wsGateway.emitOrderStatusChanged({
+      orderId: id,
+      oldStatus: order.status,
+      newStatus: dto.status,
+      updatedBy: userId,
+    })
     this.wsGateway.broadcastOrderUpdate({
       orderId: id,
       orderNumber: order.number,
       newStatus: dto.status,
       vehiclePlate: vehicle?.plate ?? "",
+      changedById: userId,
       timestamp: new Date().toISOString(),
     })
 
@@ -203,15 +190,55 @@ export class OrdersService {
     return updated
   }
 
-  async softDelete(id: string) {
-    const order = await this.prisma.workOrder.findUnique({ where: { id } })
-    if (!order) {
-      throw new NotFoundException("Orden de trabajo no encontrada")
+  async validateVehicleDelivery(orderId: string) {
+    const order = await this.prisma.workOrder.findUnique({
+      where: { id: orderId },
+      include: {
+        parts: { include: { item: true } },
+        payments: true,
+      },
+    })
+    if (!order) throw new NotFoundException("Orden no encontrada para validacion de entrega")
+
+    const laborCost = Number(order.laborCost ?? 0)
+    const partsCost = order.parts.reduce((sum, p) => sum + Number(p.unitPrice) * p.quantity, 0)
+    const totalRequired = laborCost + partsCost
+    const totalPaid = order.payments.reduce((sum, p) => sum + Number(p.amount), 0)
+
+    if (totalRequired <= 0) {
+      this.logger.warn(`OT ${order.number}: entrega sin costos registrados`)
+      return
     }
 
-    if (order.status === OrderStatus.CANCELLED) {
-      throw new ConflictException("La orden ya esta cancelada")
+    if (totalPaid < totalRequired) {
+      const pending = totalRequired - totalPaid
+      throw new ForbiddenException({
+        message: `No se puede entregar el vehiculo. Monto pendiente: S/ ${pending.toFixed(2)}`,
+        code: "DELIVERY_PAYMENT_MISMATCH",
+        details: {
+          laborCost,
+          partsCost,
+          totalRequired,
+          totalPaid,
+          pending,
+        },
+      })
     }
+
+    const suspiciousYape = order.payments.some(
+      (p) => p.method === PaymentMethod.YAPE && Number(p.amount) >= 500,
+    )
+    if (suspiciousYape) {
+      this.logger.warn(
+        `OT ${order.number}: entrega con pago Yape >= S/500 - verificar manualmente`
+      )
+    }
+  }
+
+  async softDelete(id: string) {
+    const order = await this.prisma.workOrder.findUnique({ where: { id } })
+    if (!order) throw new NotFoundException("Orden de trabajo no encontrada")
+    if (order.status === OrderStatus.CANCELLED) throw new ConflictException("La orden ya esta cancelada")
 
     const updated = await this.prisma.workOrder.update({
       where: { id },
@@ -225,10 +252,7 @@ export class OrdersService {
 
   async assignMechanic(id: string, mechanicId: string) {
     const order = await this.prisma.workOrder.findUnique({ where: { id } })
-    if (!order) {
-      throw new NotFoundException("Orden de trabajo no encontrada")
-    }
-
+    if (!order) throw new NotFoundException("Orden de trabajo no encontrada")
     if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.DELIVERED) {
       throw new ConflictException("No se puede reasignar una orden finalizada o cancelada")
     }
@@ -244,7 +268,27 @@ export class OrdersService {
   }
 
   async findByMechanic(mechanicId: string, filters: OrderFilterDto): Promise<PaginatedResult<unknown>> {
-    return this.findAll({ ...filters, mechanicId })
+    const { limit = 20, cursor } = filters
+    const where: Prisma.WorkOrderWhereInput = { mechanicId }
+    const take = limit + 1
+
+    const orders = await this.prisma.workOrder.findMany({
+      where,
+      take,
+      orderBy: { id: "asc" },
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      include: {
+        ...ORDER_INCLUDE,
+        parts: { include: { item: { select: { id: true, name: true, sku: true } } } },
+        photosRel: { select: { id: true, url: true, type: true } },
+      },
+    })
+
+    const hasMore = orders.length > limit
+    const data = hasMore ? orders.slice(0, limit) : orders
+    const nextCursor = hasMore ? data[data.length - 1].id : null
+
+    return { data, nextCursor }
   }
 
   async getSummaryStats() {
@@ -254,39 +298,21 @@ export class OrdersService {
     tomorrow.setDate(tomorrow.getDate() + 1)
 
     const [
-      activeOrders,
-      receivedToday,
-      completedToday,
-      deliveredToday,
-      totalOrders,
-      pendingPayment,
+      activeOrders, receivedToday, completedToday, deliveredToday,
+      totalOrders, pendingPayment,
     ] = await Promise.all([
-      this.prisma.workOrder.count({
-        where: { status: { notIn: ["DELIVERED", "CANCELLED"] } },
-      }),
-      this.prisma.workOrder.count({
-        where: { receivedAt: { gte: today, lt: tomorrow } },
-      }),
-      this.prisma.workOrder.count({
-        where: { completedAt: { gte: today, lt: tomorrow } },
-      }),
-      this.prisma.workOrder.count({
-        where: { deliveredAt: { gte: today, lt: tomorrow } },
-      }),
+      this.prisma.workOrder.count({ where: { status: { notIn: ["DELIVERED", "CANCELLED"] } } }),
+      this.prisma.workOrder.count({ where: { receivedAt: { gte: today, lt: tomorrow } } }),
+      this.prisma.workOrder.count({ where: { completedAt: { gte: today, lt: tomorrow } } }),
+      this.prisma.workOrder.count({ where: { deliveredAt: { gte: today, lt: tomorrow } } }),
       this.prisma.workOrder.count(),
       this.prisma.workOrder.count({
-        where: {
-          status: { in: ["READY", "IN_REVIEW"] },
-          paymentStatus: { in: ["DRAFT", "ISSUED"] },
-        },
+        where: { status: { in: ["READY", "IN_REVIEW"] }, paymentStatus: { in: ["DRAFT", "ISSUED"] } },
       }),
     ])
 
     const todayRevenue = await this.prisma.financialTransaction.aggregate({
-      where: {
-        type: "PAYMENT",
-        createdAt: { gte: today, lt: tomorrow },
-      },
+      where: { type: "PAYMENT", createdAt: { gte: today, lt: tomorrow } },
       _sum: { amount: true },
     })
 
@@ -295,12 +321,8 @@ export class OrdersService {
     })
 
     return {
-      activeOrders,
-      receivedToday,
-      completedToday,
-      deliveredToday,
-      totalOrders,
-      pendingPayment,
+      activeOrders, receivedToday, completedToday, deliveredToday,
+      totalOrders, pendingPayment,
       todayRevenue: Number(todayRevenue._sum.amount ?? 0),
       lowStockCount: lowStock,
     }
@@ -313,57 +335,88 @@ export class OrdersService {
   ) {
     const order = await this.prisma.workOrder.findUnique({ where: { id: orderId } })
     if (!order) throw new NotFoundException("Orden no encontrada")
-
     if (["DELIVERED", "CANCELLED"].includes(order.status)) {
-      throw new ConflictException("No se pueden modificar órdenes finalizadas")
+      throw new ConflictException("No se pueden modificar ordenes finalizadas")
     }
 
-    const item = await this.prisma.inventoryItem.findUnique({
-      where: { id: dto.itemId },
-    })
+    const item = await this.prisma.inventoryItem.findUnique({ where: { id: dto.itemId } })
     if (!item) throw new NotFoundException("Item de inventario no encontrado")
-
     if (item.stock < dto.quantity) {
-      throw new ConflictException(
-        `Stock insuficiente. Disponible: ${item.stock}, solicitado: ${dto.quantity}`,
-      )
+      throw new ConflictException(`Stock insuficiente. Disponible: ${item.stock}, solicitado: ${dto.quantity}`)
     }
 
     const [orderPart] = await this.prisma.$transaction([
       this.prisma.workOrderPart.create({
-        data: {
-          orderId,
-          itemId: dto.itemId,
-          quantity: dto.quantity,
-          unitPrice: dto.unitPrice,
-        },
+        data: { orderId, itemId: dto.itemId, quantity: dto.quantity, unitPrice: dto.unitPrice },
       }),
       this.prisma.inventoryMovement.create({
-        data: {
-          itemId: dto.itemId,
-          type: "OUT",
-          quantity: dto.quantity,
-          orderId,
-          authorizedBy: userId,
-          unitCost: item.unitPrice,
-          justification: `Consumo en OT ${order.number}`,
-        },
+        data: { itemId: dto.itemId, type: "OUT", quantity: dto.quantity, orderId, authorizedBy: userId, unitCost: item.unitPrice, justification: `Consumo en OT ${order.number}` },
       }),
       this.prisma.inventoryItem.update({
         where: { id: dto.itemId },
         data: { stock: item.stock - dto.quantity },
       }),
       this.prisma.workOrderEvent.create({
-        data: {
-          workOrderId: orderId,
-          event: "PART_ADDED",
-          description: `Repuesto ${item.name} x${dto.quantity} agregado`,
-          userId,
-        },
+        data: { workOrderId: orderId, event: "PART_ADDED", description: `Repuesto ${item.name} x${dto.quantity} agregado`, userId },
       }),
     ])
 
     this.logger.log(`Item ${item.sku} x${dto.quantity} agregado a OT ${order.number}`)
     return orderPart
+  }
+
+  async applyDiscount(
+    orderId: string,
+    dto: ApplyDiscountDto,
+    userId: string,
+    userRole: UserRole,
+  ) {
+    const order = await this.prisma.workOrder.findUnique({ where: { id: orderId } })
+    if (!order) throw new NotFoundException("Orden no encontrada")
+    if (["DELIVERED", "CANCELLED"].includes(order.status)) {
+      throw new ConflictException("No se puede aplicar descuento a ordenes finalizadas")
+    }
+
+    const total = Number(order.totalCost ?? order.finalAmount ?? 0)
+    const discountAmount = dto.discountAmount
+      ?? (total * (dto.discountPercentage ?? 0) / 100)
+    const discountPct = total > 0 ? (discountAmount / total) * 100 : 0
+
+    if (discountPct > 20 && userRole !== UserRole.OWNER) {
+      const approval = await this.prisma.approval.create({
+        data: {
+          type: ApprovalType.DISCOUNT,
+          status: ApprovalStatus.PENDING,
+          title: `Descuento ${discountPct.toFixed(1)}% en orden ${order.number}`,
+          description: dto.reason,
+          amount: discountAmount,
+          requestedById: userId,
+        },
+      })
+
+      this.wsGateway.emitApprovalRequested({
+        approvalId: approval.id,
+        type: "DISCOUNT",
+        amount: discountAmount,
+        requestedBy: userId,
+      })
+
+      return {
+        status: "PENDING_APPROVAL",
+        message: "Descuento > 20% requiere aprobacion de OWNER",
+        approvalId: approval.id,
+      }
+    }
+
+    const updated = await this.prisma.workOrder.update({
+      where: { id: orderId },
+      data: {
+        discount: discountAmount,
+        finalAmount: Math.max(0, total - discountAmount),
+      },
+    })
+
+    this.logger.log(`Descuento ${discountPct.toFixed(1)}% aplicado a OT ${order.number}`)
+    return updated
   }
 }

@@ -21,3 +21,6 @@ export declare class ChangePasswordDto {
 export declare class ForceLogoutDto {
     userId: string;
 }
+export declare class MechanicLoginDto {
+    pin: string;
+}

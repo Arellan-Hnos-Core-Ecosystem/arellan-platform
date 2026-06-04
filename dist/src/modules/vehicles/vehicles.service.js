@@ -13,14 +13,24 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.VehiclesService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../common/prisma/prisma.service");
+const redis_service_1 = require("../../common/redis/redis.service");
+const VEHICLE_CACHE_PREFIX = "vehicles";
+const VEHICLE_CACHE_TTL_SHORT = 60;
+const VEHICLE_CACHE_TTL_LONG = 300;
 let VehiclesService = VehiclesService_1 = class VehiclesService {
     prisma;
+    redis;
     logger = new common_1.Logger(VehiclesService_1.name);
-    constructor(prisma) {
+    constructor(prisma, redis) {
         this.prisma = prisma;
+        this.redis = redis;
     }
     async findAll(search, limit = 20, cursor) {
         const take = limit + 1;
+        const cacheKey = `${VEHICLE_CACHE_PREFIX}:list:${search ?? "all"}:${limit}:${cursor ?? "start"}`;
+        const cached = await this.redis.get(cacheKey);
+        if (cached)
+            return JSON.parse(cached);
         const where = search
             ? {
                 OR: [
@@ -39,9 +49,15 @@ let VehiclesService = VehiclesService_1 = class VehiclesService {
         const hasMore = vehicles.length > limit;
         const data = hasMore ? vehicles.slice(0, limit) : vehicles;
         const nextCursor = hasMore ? data[data.length - 1].id : null;
-        return { data, nextCursor, hasMore };
+        const result = { data, nextCursor, hasMore };
+        await this.redis.set(cacheKey, JSON.stringify(result), VEHICLE_CACHE_TTL_SHORT);
+        return result;
     }
     async findByPlate(plate) {
+        const cacheKey = `${VEHICLE_CACHE_PREFIX}:plate:${plate.toUpperCase()}`;
+        const cached = await this.redis.get(cacheKey);
+        if (cached)
+            return JSON.parse(cached);
         const vehicle = await this.prisma.vehicle.findFirst({
             where: { plate: { equals: plate, mode: "insensitive" } },
             include: {
@@ -51,9 +67,14 @@ let VehiclesService = VehiclesService_1 = class VehiclesService {
         if (!vehicle) {
             throw new common_1.NotFoundException("Vehiculo no encontrado");
         }
+        await this.redis.set(cacheKey, JSON.stringify(vehicle), VEHICLE_CACHE_TTL_LONG);
         return vehicle;
     }
     async findOne(id) {
+        const cacheKey = `${VEHICLE_CACHE_PREFIX}:id:${id}`;
+        const cached = await this.redis.get(cacheKey);
+        if (cached)
+            return JSON.parse(cached);
         const vehicle = await this.prisma.vehicle.findUnique({
             where: { id },
             include: {
@@ -62,12 +83,8 @@ let VehiclesService = VehiclesService_1 = class VehiclesService {
                     orderBy: { createdAt: "desc" },
                     take: 10,
                     select: {
-                        id: true,
-                        number: true,
-                        status: true,
-                        description: true,
-                        totalCost: true,
-                        createdAt: true,
+                        id: true, number: true, status: true,
+                        description: true, totalCost: true, createdAt: true,
                     },
                 },
             },
@@ -75,6 +92,7 @@ let VehiclesService = VehiclesService_1 = class VehiclesService {
         if (!vehicle) {
             throw new common_1.NotFoundException("Vehiculo no encontrado");
         }
+        await this.redis.set(cacheKey, JSON.stringify(vehicle), VEHICLE_CACHE_TTL_LONG);
         return vehicle;
     }
     async create(dto) {
@@ -92,37 +110,71 @@ let VehiclesService = VehiclesService_1 = class VehiclesService {
             data: dto,
             include: { client: { select: { id: true, firstName: true, lastName: true } } },
         });
+        await this.invalidateVehicleCache();
         this.logger.log(`Vehiculo creado: ${vehicle.plate} (${vehicle.id})`);
         return vehicle;
     }
     async update(id, dto) {
-        await this.findOne(id);
+        const existing = await this.findOne(id);
         if (dto.plate) {
-            const existing = await this.prisma.vehicle.findFirst({
+            const dup = await this.prisma.vehicle.findFirst({
                 where: { plate: { equals: dto.plate, mode: "insensitive" }, id: { not: id } },
             });
-            if (existing) {
+            if (dup)
                 throw new common_1.ConflictException("Ya existe otro vehiculo con esa placa");
-            }
         }
         if (dto.clientId) {
             const client = await this.prisma.client.findUnique({ where: { id: dto.clientId } });
-            if (!client) {
+            if (!client)
                 throw new common_1.NotFoundException("Cliente no encontrado");
-            }
         }
         const vehicle = await this.prisma.vehicle.update({
             where: { id },
             data: dto,
             include: { client: { select: { id: true, firstName: true, lastName: true } } },
         });
+        await this.invalidateVehicleCache();
+        await this.redis.del(`${VEHICLE_CACHE_PREFIX}:id:${id}`);
+        if (existing.plate)
+            await this.redis.del(`${VEHICLE_CACHE_PREFIX}:plate:${existing.plate.toUpperCase()}`);
+        if (dto.plate)
+            await this.redis.del(`${VEHICLE_CACHE_PREFIX}:plate:${dto.plate.toUpperCase()}`);
         this.logger.log(`Vehiculo actualizado: ${vehicle.plate} (${vehicle.id})`);
         return vehicle;
+    }
+    async invalidateVehicleCache() {
+        try {
+            const client = this.redis.client;
+            let cursor = "0";
+            do {
+                const [nextCursor, keys] = await client.scan(cursor, "MATCH", `${VEHICLE_CACHE_PREFIX}:list:*`, "COUNT", 100);
+                cursor = nextCursor;
+                if (keys.length > 0)
+                    await client.del(...keys);
+            } while (cursor !== "0");
+        }
+        catch (err) {
+            this.logger.warn(`Cache invalidation warning: ${err.message}`);
+        }
+    }
+    async getWorkshopFleet() {
+        return this.prisma.vehicle.findMany({
+            where: { plate: { startsWith: "TAL-" } },
+            include: {
+                usageLogs: {
+                    where: { status: "PENDING_RETURN" },
+                    take: 1,
+                    include: { personnel: { select: { firstName: true, lastName: true } } },
+                },
+            },
+            orderBy: { createdAt: "desc" },
+        });
     }
 };
 exports.VehiclesService = VehiclesService;
 exports.VehiclesService = VehiclesService = VehiclesService_1 = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+        redis_service_1.RedisService])
 ], VehiclesService);
 //# sourceMappingURL=vehicles.service.js.map

@@ -1,23 +1,34 @@
-import { Injectable, NotFoundException, ConflictException, Logger } from "@nestjs/common"
+import { Injectable, NotFoundException, ConflictException, BadRequestException, Logger } from "@nestjs/common"
 import { PrismaService } from "../../common/prisma/prisma.service"
+import { RedisService } from "../../common/redis/redis.service"
 import { CreateItemDto, UpdateItemDto, InventoryMovementDto } from "./dto/inventory.dto"
 import { Prisma, MovementType } from "@prisma/client"
+
+const CACHE_PREFIX = "inventory"
+const CATALOG_CACHE_TTL = 120
+const ITEM_CACHE_TTL = 300
 
 @Injectable()
 export class InventoryService {
   private readonly logger = new Logger(InventoryService.name)
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
+  ) {}
 
   async findAll(category?: string, lowStock?: boolean, limit = 20, cursor?: string) {
     if (lowStock) {
       return this.findAllLowStock(category, limit, cursor)
     }
 
-    const take = limit + 1
+    const cacheKey = `${CACHE_PREFIX}:catalog:${category ?? "all"}:${limit}:${cursor ?? "start"}`
+    const cached = await this.redis.get(cacheKey)
+    if (cached) return JSON.parse(cached)
 
+    const take = limit + 1
     const items = await this.prisma.inventoryItem.findMany({
-      where: category ? { category } : {},
+      where: category ? { categoryId: category } : {},
       orderBy: { createdAt: "desc" },
       take,
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
@@ -26,49 +37,48 @@ export class InventoryService {
     const hasMore = items.length > limit
     const data = hasMore ? items.slice(0, limit) : items
     const nextCursor = hasMore ? data[data.length - 1].id : null
+    const result = { data, nextCursor, hasMore }
 
-    return { data, nextCursor, hasMore }
+    await this.redis.set(cacheKey, JSON.stringify(result), CATALOG_CACHE_TTL)
+    return result
   }
 
   private async findAllLowStock(category?: string, limit = 20, cursor?: string) {
-    const conditions: string[] = [`stock <= "minStock"`]
+    const cacheKey = `${CACHE_PREFIX}:lowstock:${category ?? "all"}:${limit}:${cursor ?? "start"}`
+    const cached = await this.redis.get(cacheKey)
+    if (cached) return JSON.parse(cached)
 
-    if (category) {
-      conditions.push(`category = '${category.replace(/'/g, "''")}'`)
-    }
-
-    if (cursor) {
-      conditions.push(`id < '${cursor.replace(/'/g, "''")}'`)
-    }
-
-    const whereClause = conditions.join(" AND ")
     const take = limit + 1
+    const items = await this.prisma.inventoryItem.findMany({
+      where: {
+        stock: { lte: this.prisma.inventoryItem.fields.minStock },
+        ...(category ? { categoryId: category } : {}),
+      },
+      orderBy: { stock: "asc" },
+      take,
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+    })
 
-    const items = await this.prisma.$queryRawUnsafe<Array<{
-      id: string; sku: string; name: string; category: string
-      stock: number; minStock: number; unitPrice: string
-      createdAt: Date; updatedAt: Date
-    }>>(
-      `SELECT * FROM inventory_items WHERE ${whereClause} ORDER BY id DESC LIMIT ${take}`,
-    )
-
-    const inventoryItems = items.map((i) => ({
-      ...i,
-      unitPrice: i.unitPrice,
-    }))
-
-    const hasMore = inventoryItems.length > limit
-    const data = hasMore ? inventoryItems.slice(0, limit) : inventoryItems
+    const hasMore = items.length > limit
+    const data = hasMore ? items.slice(0, limit) : items
     const nextCursor = hasMore ? data[data.length - 1].id : null
+    const result = { data, nextCursor, hasMore }
 
-    return { data, nextCursor, hasMore }
+    await this.redis.set(cacheKey, JSON.stringify(result), CATALOG_CACHE_TTL)
+    return result
   }
 
   async findOne(id: string) {
+    const cacheKey = `${CACHE_PREFIX}:item:${id}`
+    const cached = await this.redis.get(cacheKey)
+    if (cached) return JSON.parse(cached)
+
     const item = await this.prisma.inventoryItem.findUnique({ where: { id } })
     if (!item) {
       throw new NotFoundException("Item de inventario no encontrado")
     }
+
+    await this.redis.set(cacheKey, JSON.stringify(item), ITEM_CACHE_TTL)
     return item
   }
 
@@ -84,13 +94,15 @@ export class InventoryService {
       data: {
         sku: dto.sku,
         name: dto.name,
-        category: dto.category,
+        categoryId: dto.category,
+        costPrice: 0,
         stock: dto.stock,
         minStock: dto.minStock,
         unitPrice: dto.unitPrice,
       },
     })
 
+    await this.invalidateCatalogCache()
     this.logger.log(`Item creado: ${item.sku} (${item.id})`)
     return item
   }
@@ -107,10 +119,19 @@ export class InventoryService {
       }
     }
 
+    const { category, ...rest } = dto
+    const updateData: Prisma.InventoryItemUpdateInput = {
+      ...rest,
+      ...(category !== undefined ? { categoryId: category } : {}),
+    }
+
     const item = await this.prisma.inventoryItem.update({
       where: { id },
-      data: dto,
+      data: updateData as any,
     })
+
+    await this.redis.del(`${CACHE_PREFIX}:item:${id}`)
+    await this.invalidateCatalogCache()
 
     this.logger.log(`Item actualizado: ${item.sku} (${item.id})`)
     return item
@@ -135,15 +156,9 @@ export class InventoryService {
 
     let newStock: number
     switch (dto.type) {
-      case MovementType.IN:
-        newStock = item.stock + dto.quantity
-        break
-      case MovementType.OUT:
-        newStock = item.stock - dto.quantity
-        break
-      case MovementType.ADJUSTMENT:
-        newStock = dto.quantity
-        break
+      case MovementType.IN: newStock = item.stock + dto.quantity; break
+      case MovementType.OUT: newStock = item.stock - dto.quantity; break
+      case MovementType.ADJUSTMENT: newStock = dto.quantity; break
     }
 
     const [movement] = await this.prisma.$transaction([
@@ -164,6 +179,11 @@ export class InventoryService {
       }),
     ])
 
+    await this.redis.del(`${CACHE_PREFIX}:item:${itemId}`)
+    await this.invalidateCatalogCache()
+    await this.redis.del(`${CACHE_PREFIX}:lowstock:*`)
+    await this.redis.del(`${CACHE_PREFIX}:valuation`)
+
     this.logger.log(
       `Movimiento ${dto.type} x${dto.quantity} en item ${item.sku}, stock: ${item.stock} -> ${newStock}`,
     )
@@ -172,7 +192,6 @@ export class InventoryService {
 
   async getMovements(itemId: string, limit = 20, cursor?: string) {
     await this.findOne(itemId)
-
     const take = limit + 1
 
     const movements = await this.prisma.inventoryMovement.findMany({
@@ -189,13 +208,123 @@ export class InventoryService {
     return { data, nextCursor, hasMore }
   }
 
-  async getCriticalStock() {
-    const items = await this.prisma.$queryRawUnsafe<Array<{
-      id: string; sku: string; name: string; category: string
-      stock: number; minStock: number; unitPrice: string
-      createdAt: Date; updatedAt: Date
-    }>>(`SELECT * FROM inventory_items WHERE stock <= "minStock" ORDER BY stock ASC`)
+  async getAllMovements(itemId?: string, type?: string, limit = 20, cursor?: string) {
+    const take = limit + 1
+    const where: any = {}
+    if (itemId) where.itemId = itemId
+    if (type) where.type = type
 
+    const movements = await this.prisma.inventoryMovement.findMany({
+      where,
+      include: { item: { select: { name: true, sku: true, unit: true } } },
+      orderBy: { createdAt: "desc" },
+      take,
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+    })
+
+    const hasMore = movements.length > limit
+    const data = hasMore ? movements.slice(0, limit) : movements
+    const nextCursor = hasMore ? data[data.length - 1].id : null
+
+    return { data, nextCursor, hasMore }
+  }
+
+  async getCriticalStock() {
+    const cacheKey = `${CACHE_PREFIX}:critical`
+    const cached = await this.redis.get(cacheKey)
+    if (cached) return JSON.parse(cached)
+
+    const items = await this.prisma.inventoryItem.findMany({
+      where: { stock: { lte: this.prisma.inventoryItem.fields.minStock } },
+      orderBy: { stock: "asc" },
+    })
+
+    await this.redis.set(cacheKey, JSON.stringify(items), 60)
     return items
+  }
+
+  async getValuation() {
+    const cacheKey = `${CACHE_PREFIX}:valuation`
+    const cached = await this.redis.get(cacheKey)
+    if (cached) return JSON.parse(cached)
+
+    const items = await this.prisma.inventoryItem.findMany({
+      where: { isActive: true },
+      select: { stock: true, costPrice: true, unitPrice: true, minStock: true },
+    })
+
+    const totalItems = items.length
+    const totalCostValue = items.reduce((sum, i) => sum + Number(i.costPrice) * i.stock, 0)
+    const totalSaleValue = items.reduce((sum, i) => sum + Number(i.unitPrice) * i.stock, 0)
+    const lowStockCount = items.filter((i) => i.stock <= i.minStock).length
+
+    const result = { totalItems, totalCostValue, totalSaleValue, lowStockCount }
+    await this.redis.set(cacheKey, JSON.stringify(result), 120)
+    return result
+  }
+
+  async reserveForOrder(
+    itemId: string,
+    quantity: number,
+    workOrderId: string,
+    userId: string,
+  ) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const item = await tx.inventoryItem.findUnique({ where: { id: itemId } })
+      if (!item) throw new NotFoundException(`Item ${itemId} no encontrado`)
+      if (item.stock < quantity) {
+        throw new BadRequestException(
+          `Stock insuficiente. Disponible: ${item.stock}, solicitado: ${quantity}`,
+        )
+      }
+
+      await tx.inventoryItem.update({
+        where: { id: itemId },
+        data: { stock: { decrement: quantity } },
+      })
+
+      await tx.inventoryMovement.create({
+        data: {
+          itemId,
+          type: MovementType.OUT,
+          quantity,
+          orderId: workOrderId,
+          authorizedBy: userId,
+          justification: `Reservado para orden ${workOrderId}`,
+        },
+      })
+
+      const updated = await tx.inventoryItem.findUnique({ where: { id: itemId } })
+
+      this.logger.log(
+        `Reserva: ${item.sku} x${quantity} para OT ${workOrderId}. Stock: ${item.stock} -> ${updated?.stock}`,
+      )
+
+      return { success: true, remainingStock: updated?.stock ?? 0 }
+    })
+
+    await this.redis.del(`${CACHE_PREFIX}:item:${itemId}`)
+    await this.invalidateCatalogCache()
+    await this.redis.del(`${CACHE_PREFIX}:lowstock:*`)
+    await this.redis.del(`${CACHE_PREFIX}:critical`)
+    await this.redis.del(`${CACHE_PREFIX}:valuation`)
+
+    return result
+  }
+
+  private async invalidateCatalogCache() {
+    try {
+      const client = this.redis.client
+      let cursor = "0"
+      do {
+        const [nextCursor, keys] = await client.scan(
+          cursor, "MATCH", `${CACHE_PREFIX}:catalog:*`, "COUNT", 100,
+        )
+        cursor = nextCursor
+        if (keys.length > 0) await client.del(...keys)
+      } while (cursor !== "0")
+    } catch (err) {
+      this.logger.warn(`Cache invalidation warning: ${(err as Error).message}`)
+    }
   }
 }

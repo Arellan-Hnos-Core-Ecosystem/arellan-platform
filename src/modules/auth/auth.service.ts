@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, NotFoundException, Logger } from "@nestjs/common"
+import { Injectable, UnauthorizedException, NotFoundException, Logger, HttpException, HttpStatus, ForbiddenException } from "@nestjs/common"
 import { JwtService } from "@nestjs/jwt"
 import { ConfigService } from "@nestjs/config"
 import { PrismaService } from "../../common/prisma/prisma.service"
@@ -38,7 +38,10 @@ export class AuthService {
     }
 
     if (account.lockedUntil && new Date(account.lockedUntil) > new Date()) {
-      throw new UnauthorizedException("Cuenta bloqueada temporalmente")
+      throw new HttpException(
+        { statusCode: 429, message: "Demasiados intentos fallidos. Cuenta bloqueada 15 minutos.", code: "ACCOUNT_LOCKED" },
+        HttpStatus.TOO_MANY_REQUESTS
+      )
     }
 
     const isValid = await bcrypt.compare(dto.password, account.passwordHash)
@@ -73,6 +76,37 @@ export class AuthService {
         message: "Ingresa el codigo de autenticacion de tu app 2FA",
       }
     }
+
+    return this.generateTokens(account, false, ip, userAgent)
+  }
+
+  async mechanicLogin(pin: string, ip: string, userAgent?: string) {
+    const personnel = await this.prisma.personnel.findUnique({
+      where: { pin },
+      include: { account: true },
+    })
+
+    if (!personnel || !personnel.account) {
+      throw new UnauthorizedException("PIN invalido")
+    }
+
+    const account = personnel.account
+
+    if (account.status !== "ACTIVE") {
+      throw new UnauthorizedException("Cuenta inactiva. Contacte al administrador.")
+    }
+
+    const allowedRoles: UserRole[] = [UserRole.MECHANIC, UserRole.TRAINEE]
+    if (!allowedRoles.includes(account.role)) {
+      throw new UnauthorizedException("Este PIN no corresponde a un perfil de taller")
+    }
+
+    await this.prisma.account.update({
+      where: { id: account.id },
+      data: { lastLoginAt: new Date(), lastLoginIp: ip },
+    })
+
+    this.logger.log(`Mechanic login: ${account.name} (${account.role}) from ${ip}`)
 
     return this.generateTokens(account, false, ip, userAgent)
   }

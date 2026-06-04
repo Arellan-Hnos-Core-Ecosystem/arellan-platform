@@ -2,18 +2,17 @@ import { NestFactory } from "@nestjs/core"
 import { ValidationPipe, Logger } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger"
-import * as helmet from "helmet"
+import helmet from "helmet"
+import { IoAdapter } from "@nestjs/platform-socket.io"
 import { AppModule } from "./app.module"
 import { HttpExceptionFilter } from "./common/filters/http-exception.filter"
-import { WsAuthMiddleware } from "./gateways/ws-auth.middleware"
-import { OrdersGateway } from "./gateways/orders.gateway"
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule)
   const config = app.get(ConfigService)
   const logger = new Logger("Bootstrap")
 
-  app.use(helmet.default())
+  app.use(helmet())
 
   app.enableCors({
     origin:
@@ -38,27 +37,29 @@ async function bootstrap() {
 
   app.useGlobalFilters(new HttpExceptionFilter())
 
+  app.useWebSocketAdapter(new IoAdapter(app))
+
   const swaggerConfig = new DocumentBuilder()
-    .setTitle("Clínica Automotriz Arellan Hnos — API")
-    .setDescription("API REST para gestión de taller automotriz. Módulos: Auth, Órdenes de Trabajo, Finanzas, Inventario, Personal, Asistencia, Compras, Comisiones, Cotizaciones, Facturación, Pagos, Auditoría, Configuraciones")
+    .setTitle("Clinica Automotriz Arellan Hnos -- API")
+    .setDescription("API REST para gestion de taller automotriz. Modulos: Auth, Ordenes de Trabajo, Finanzas, Inventario, Personal, Asistencia, Compras, Comisiones, Cotizaciones, Facturacion, Pagos, Auditoria, Configuraciones")
     .setVersion("2.0.0")
     .addBearerAuth({ type: "http", scheme: "bearer", bearerFormat: "JWT" }, "access-token")
-    .addTag("Auth", "Autenticación y sesiones")
-    .addTag("Orders", "Órdenes de trabajo")
+    .addTag("Auth", "Autenticacion y sesiones")
+    .addTag("Orders", "Ordenes de trabajo")
     .addTag("Finance", "Caja, transacciones, gastos")
     .addTag("Inventory", "Inventario y movimientos")
     .addTag("Clients", "Clientes")
-    .addTag("Vehicles", "Vehículos")
+    .addTag("Vehicles", "Vehiculos")
     .addTag("Personnel", "Personal y perfil")
     .addTag("Attendance", "Asistencia")
-    .addTag("Payments", "Pagos y métodos")
-    .addTag("Invoices", "Facturación")
+    .addTag("Payments", "Pagos y metodos")
+    .addTag("Invoices", "Facturacion")
     .addTag("Purchases", "Compras a proveedores")
     .addTag("Quotes", "Cotizaciones")
     .addTag("Commissions", "Comisiones")
-    .addTag("Audit", "Auditoría y logs")
+    .addTag("Audit", "Auditoria y logs")
     .addTag("Settings", "Configuraciones")
-    .addServer("http://localhost:3000", "Desarrollo Local")
+    .addServer("http://localhost:3001", "Desarrollo Local")
     .build()
 
   const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig)
@@ -66,22 +67,11 @@ async function bootstrap() {
     swaggerOptions: { persistAuthorization: true, docExpansion: "list", filter: true }
   })
 
-  const wsAdapter = app.getHttpAdapter()
-  if (wsAdapter && typeof (wsAdapter as any).getHttpServer === "function") {
-    const httpServer = (wsAdapter as any).getHttpServer()
-    const ordersGateway = app.get(OrdersGateway)
-    const wsAuthMiddleware = app.get(WsAuthMiddleware)
-
-    ordersGateway.server.use((socket: any, next: (err?: Error) => void) =>
-      wsAuthMiddleware.use(socket, next),
-    )
-  }
-
   const port = config.get("PORT", 3001)
   await app.listen(port)
   logger.log(`Arellan Platform v2.0 running on http://localhost:${port}`)
   logger.log(`Swagger docs available at http://localhost:${port}/api/docs`)
-  logger.log(`WebSocket Gateway ready on ws://localhost:${port}/ws/orders`)
+  logger.log(`WebSocket available on ws://localhost:${port}`)
 }
 
 bootstrap()

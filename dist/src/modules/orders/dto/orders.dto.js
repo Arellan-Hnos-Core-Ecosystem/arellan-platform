@@ -9,7 +9,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.OrderFilterDto = exports.AssignMechanicDto = exports.UpdateStatusDto = exports.UpdateOrderDto = exports.CreateOrderDto = void 0;
+exports.OrderFilterDto = exports.ApplyDiscountDto = exports.AssignMechanicDto = exports.UpdateStatusDto = exports.UpdateOrderDto = exports.CreateOrderDto = void 0;
 const class_validator_1 = require("class-validator");
 const client_1 = require("@prisma/client");
 class CreateOrderDto {
@@ -84,6 +84,28 @@ __decorate([
     (0, class_validator_1.IsUUID)("4", { message: "ID de mecanico invalido" }),
     __metadata("design:type", String)
 ], AssignMechanicDto.prototype, "mechanicId", void 0);
+class ApplyDiscountDto {
+    discountAmount;
+    discountPercentage;
+    reason;
+}
+exports.ApplyDiscountDto = ApplyDiscountDto;
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsNumber)({ maxDecimalPlaces: 2 }, { message: "Monto de descuento invalido" }),
+    __metadata("design:type", Number)
+], ApplyDiscountDto.prototype, "discountAmount", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsNumber)({ maxDecimalPlaces: 2 }, { message: "Porcentaje de descuento invalido" }),
+    (0, class_validator_1.Min)(0),
+    (0, class_validator_1.Max)(100),
+    __metadata("design:type", Number)
+], ApplyDiscountDto.prototype, "discountPercentage", void 0);
+__decorate([
+    (0, class_validator_1.IsString)({ message: "Razon del descuento requerida" }),
+    __metadata("design:type", String)
+], ApplyDiscountDto.prototype, "reason", void 0);
 class OrderFilterDto {
     status;
     mechanicId;

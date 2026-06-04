@@ -15,7 +15,7 @@ export declare class PublicController {
             brand: string;
             model: string;
             year: number;
-            color: string;
+            color: string | null;
         };
         activeOrder: null;
         message?: undefined;
@@ -27,7 +27,7 @@ export declare class PublicController {
             brand: string;
             model: string;
             year: number;
-            color: string;
+            color: string | null;
         };
         order: {
             id: string;
@@ -57,7 +57,7 @@ export declare class PublicController {
             brand: string;
             model: string;
             year: number;
-            color: string;
+            color: string | null;
         };
         order: {
             id: string;
@@ -66,6 +66,36 @@ export declare class PublicController {
             description: string;
             diagnosis: string | null;
             totalCost: import("@prisma/client/runtime/library").Decimal | null;
+            receivedAt: Date;
+            estimatedDelivery: Date | null;
+            deliveredAt: Date | null;
+            statusHistory: {
+                status: import(".prisma/client").$Enums.OrderStatus;
+                timestamp: Date;
+            }[];
+        };
+        message?: undefined;
+    }>;
+    getOrderByNumber(orderNumber: string): Promise<{
+        found: boolean;
+        message: string;
+        order?: undefined;
+    } | {
+        found: boolean;
+        order: {
+            number: string;
+            status: import(".prisma/client").$Enums.OrderStatus;
+            description: string;
+            client: {
+                firstName: string;
+            };
+            vehicle: {
+                plate: string;
+                brand: string;
+                model: string;
+                year: number;
+                color: string | null;
+            };
             receivedAt: Date;
             estimatedDelivery: Date | null;
             deliveredAt: Date | null;

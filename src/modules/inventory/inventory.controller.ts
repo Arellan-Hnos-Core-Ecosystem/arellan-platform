@@ -22,10 +22,38 @@ import { UserRole } from "@prisma/client"
 export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}
 
+  @Get("movements")
+  @Roles(UserRole.ADMIN, UserRole.OWNER, UserRole.FINANCE)
+  getAllMovements(
+    @Query("itemId") itemId?: string,
+    @Query("type") type?: string,
+    @Query("limit") limit?: string,
+    @Query("cursor") cursor?: string,
+  ) {
+    return this.inventoryService.getAllMovements(
+      itemId,
+      type,
+      limit ? parseInt(limit, 10) : undefined,
+      cursor,
+    )
+  }
+
   @Get("critical/list")
   @Roles(UserRole.ADMIN, UserRole.OWNER, UserRole.FINANCE)
   getCriticalStock() {
     return this.inventoryService.getCriticalStock()
+  }
+
+  @Get("low-stock")
+  @Roles(UserRole.ADMIN, UserRole.OWNER, UserRole.FINANCE)
+  getLowStock() {
+    return this.inventoryService.getCriticalStock()
+  }
+
+  @Get("valuation")
+  @Roles(UserRole.ADMIN, UserRole.OWNER, UserRole.FINANCE)
+  getValuation() {
+    return this.inventoryService.getValuation()
   }
 
   @Get()
@@ -83,6 +111,21 @@ export class InventoryController {
       id,
       limit ? parseInt(limit, 10) : undefined,
       cursor,
+    )
+  }
+
+  @Post(":id/reserve")
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.MECHANIC)
+  reserveForOrder(
+    @Param("id") itemId: string,
+    @Body() body: { quantity: number; workOrderId: string },
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.inventoryService.reserveForOrder(
+      itemId,
+      body.quantity,
+      body.workOrderId,
+      user.id,
     )
   }
 }

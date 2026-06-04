@@ -58,7 +58,9 @@ let ClientsService = ClientsService_1 = class ClientsService {
                 throw new common_1.ConflictException("Ya existe un cliente con ese DNI");
             }
         }
-        const client = await this.prisma.client.create({ data: dto });
+        const client = await this.prisma.client.create({
+            data: { ...dto, phone: dto.phone ?? "-" },
+        });
         this.logger.log(`Cliente creado: ${client.firstName} ${client.lastName} (${client.id})`);
         return client;
     }

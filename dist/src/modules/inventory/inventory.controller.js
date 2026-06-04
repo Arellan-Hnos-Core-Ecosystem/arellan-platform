@@ -26,8 +26,17 @@ let InventoryController = class InventoryController {
     constructor(inventoryService) {
         this.inventoryService = inventoryService;
     }
+    getAllMovements(itemId, type, limit, cursor) {
+        return this.inventoryService.getAllMovements(itemId, type, limit ? parseInt(limit, 10) : undefined, cursor);
+    }
     getCriticalStock() {
         return this.inventoryService.getCriticalStock();
+    }
+    getLowStock() {
+        return this.inventoryService.getCriticalStock();
+    }
+    getValuation() {
+        return this.inventoryService.getValuation();
     }
     findAll(category, lowStock, limit, cursor) {
         return this.inventoryService.findAll(category, lowStock === "true", limit ? parseInt(limit, 10) : undefined, cursor);
@@ -47,8 +56,22 @@ let InventoryController = class InventoryController {
     getMovements(id, limit, cursor) {
         return this.inventoryService.getMovements(id, limit ? parseInt(limit, 10) : undefined, cursor);
     }
+    reserveForOrder(itemId, body, user) {
+        return this.inventoryService.reserveForOrder(itemId, body.quantity, body.workOrderId, user.id);
+    }
 };
 exports.InventoryController = InventoryController;
+__decorate([
+    (0, common_1.Get)("movements"),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN, client_1.UserRole.OWNER, client_1.UserRole.FINANCE),
+    __param(0, (0, common_1.Query)("itemId")),
+    __param(1, (0, common_1.Query)("type")),
+    __param(2, (0, common_1.Query)("limit")),
+    __param(3, (0, common_1.Query)("cursor")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, String, String]),
+    __metadata("design:returntype", void 0)
+], InventoryController.prototype, "getAllMovements", null);
 __decorate([
     (0, common_1.Get)("critical/list"),
     (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN, client_1.UserRole.OWNER, client_1.UserRole.FINANCE),
@@ -56,6 +79,20 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], InventoryController.prototype, "getCriticalStock", null);
+__decorate([
+    (0, common_1.Get)("low-stock"),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN, client_1.UserRole.OWNER, client_1.UserRole.FINANCE),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], InventoryController.prototype, "getLowStock", null);
+__decorate([
+    (0, common_1.Get)("valuation"),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN, client_1.UserRole.OWNER, client_1.UserRole.FINANCE),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], InventoryController.prototype, "getValuation", null);
 __decorate([
     (0, common_1.Get)(),
     (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN, client_1.UserRole.OWNER, client_1.UserRole.FINANCE),
@@ -112,6 +149,16 @@ __decorate([
     __metadata("design:paramtypes", [String, String, String]),
     __metadata("design:returntype", void 0)
 ], InventoryController.prototype, "getMovements", null);
+__decorate([
+    (0, common_1.Post)(":id/reserve"),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.OWNER, client_1.UserRole.ADMIN, client_1.UserRole.MECHANIC),
+    __param(0, (0, common_1.Param)("id")),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object, Object]),
+    __metadata("design:returntype", void 0)
+], InventoryController.prototype, "reserveForOrder", null);
 exports.InventoryController = InventoryController = __decorate([
     (0, common_1.Controller)("inventory"),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),

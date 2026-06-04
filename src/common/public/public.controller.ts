@@ -105,4 +105,35 @@ export class PublicController {
       },
     }
   }
+
+  @Get("orders/number/:orderNumber/status")
+  async getOrderByNumber(@Param("orderNumber") orderNumber: string) {
+    const order = await this.prisma.workOrder.findUnique({
+      where: { number: orderNumber.toUpperCase().trim() },
+      select: {
+        number: true,
+        status: true,
+        description: true,
+        receivedAt: true,
+        estimatedDelivery: true,
+        deliveredAt: true,
+        vehicle: {
+          select: { plate: true, brand: true, model: true, year: true, color: true },
+        },
+        client: {
+          select: { firstName: true },
+        },
+        statusHistory: {
+          select: { status: true, timestamp: true },
+          orderBy: { timestamp: "asc" },
+        },
+      },
+    })
+
+    if (!order) {
+      return { found: false, message: "Orden de trabajo no encontrada" }
+    }
+
+    return { found: true, order }
+  }
 }

@@ -1,7 +1,7 @@
 import { Module } from "@nestjs/common"
 import { ConfigModule } from "@nestjs/config"
 import { ThrottlerModule, ThrottlerGuard } from "@nestjs/throttler"
-import { APP_GUARD } from "@nestjs/core"
+import { APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core"
 import { PrismaModule } from "./common/prisma/prisma.module"
 import { RedisModule } from "./common/redis/redis.module"
 import { CryptoModule } from "./common/crypto/crypto.module"
@@ -27,7 +27,8 @@ import { SettingsModule } from "./modules/settings/settings.module"
 import { AuditModule } from "./modules/audit/audit.module"
 import { HealthModule } from "./common/health/health.module"
 import { PublicModule } from "./common/public/public.module"
-
+import { AntiFraudModule } from "./common/anti-fraud/anti-fraud.module"
+import { AuditInterceptor } from "./common/interceptors/audit.interceptor"
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -57,7 +58,11 @@ import { PublicModule } from "./common/public/public.module"
     AuditModule,
     HealthModule,
     PublicModule,
+    AntiFraudModule,
   ],
-  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
+  ],
 })
 export class AppModule {}

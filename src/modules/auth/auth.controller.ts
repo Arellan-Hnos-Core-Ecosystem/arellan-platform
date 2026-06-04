@@ -1,6 +1,6 @@
-import { Controller, Post, Get, Delete, Body, Param, Req, UseGuards } from "@nestjs/common"
+import { Controller, Post, Get, Delete, Body, Param, Req, UseGuards, HttpCode } from "@nestjs/common"
 import { AuthService, AuthUser } from "./auth.service"
-import { LoginDto, MfaVerifyDto, RegisterDto, ChangePasswordDto, ForceLogoutDto } from "./dto/auth.dto"
+import { LoginDto, MfaVerifyDto, RegisterDto, ChangePasswordDto, ForceLogoutDto, MechanicLoginDto } from "./dto/auth.dto"
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard"
 import { RolesGuard } from "../../common/guards/roles.guard"
 import { Roles } from "../../common/decorators/roles.decorator"
@@ -16,6 +16,13 @@ export class AuthController {
     const ip = req.ip || req.socket?.remoteAddress || "unknown"
     const userAgent = req.headers?.["user-agent"]
     return this.authService.login(dto, ip, userAgent)
+  }
+
+  @Post("mechanic/login")
+  mechanicLogin(@Body() dto: MechanicLoginDto, @Req() req: any) {
+    const ip = req.ip || req.socket?.remoteAddress || "unknown"
+    const userAgent = req.headers?.["user-agent"]
+    return this.authService.mechanicLogin(dto.pin, ip, userAgent)
   }
 
   @Post("mfa/verify")
@@ -45,6 +52,13 @@ export class AuthController {
   @Post("refresh")
   refreshToken(@Body("refreshToken") refreshToken: string) {
     return this.authService.refreshToken(refreshToken)
+  }
+
+  @Post("logout")
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  logoutWithAccessToken(@CurrentUser() user: AuthUser) {
+    return this.authService.logoutAll(user.id)
   }
 
   @Delete("logout")

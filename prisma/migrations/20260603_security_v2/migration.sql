@@ -13,38 +13,38 @@ ALTER TABLE financial_transactions
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- Composite index: orders by mechanic + status (most frequent mechanic query)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_work_orders_mechanic_status
+CREATE INDEX IF NOT EXISTS idx_work_orders_mechanic_status
   ON work_orders ("mechanicId", status)
   WHERE status NOT IN ('DELIVERED', 'CANCELLED');
 
 -- Composite index: financial transactions by session + type (reconciliation)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_financial_transactions_session_type
+CREATE INDEX IF NOT EXISTS idx_financial_transactions_session_type
   ON financial_transactions ("sessionId", type);
 
 -- Composite index: expenses pending by approval level
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_expenses_pending_level
+CREATE INDEX IF NOT EXISTS idx_expenses_pending_level
   ON expense_authorizations (status, "approvalLevel")
   WHERE status = 'PENDING_APPROVAL';
 
 -- Composite index: audit logs by user + date (audit trail lookup)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_audit_logs_user_date
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user_date
   ON audit_logs ("userId", "createdAt" DESC);
 
 -- Composite index: inventory movements by order (traceability)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_inventory_movements_order
+CREATE INDEX IF NOT EXISTS idx_inventory_movements_order
   ON inventory_movements ("orderId", type);
 
 -- Index on integrity hash for verification queries
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_audit_logs_integrity
+CREATE INDEX IF NOT EXISTS idx_audit_logs_integrity
   ON audit_logs ("integrityHash")
   WHERE "integrityHash" IS NOT NULL;
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_financial_tx_integrity
+CREATE INDEX IF NOT EXISTS idx_financial_tx_integrity
   ON financial_transactions ("integrityHash")
   WHERE "integrityHash" IS NOT NULL;
 
 -- Full-text search index for work orders (plate + description + client name)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_work_orders_fts
+CREATE INDEX IF NOT EXISTS idx_work_orders_fts
   ON work_orders USING gin (
     to_tsvector('spanish', COALESCE(number, '') || ' ' || COALESCE(description, ''))
   );

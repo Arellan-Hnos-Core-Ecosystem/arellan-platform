@@ -58,7 +58,7 @@ export class FinanceController {
 
   @Post("expenses")
   @UseGuards(JwtAuthGuard, RolesGuard, MfaRequiredGuard)
-  @Roles(UserRole.FINANCE, UserRole.ADMIN)
+  @Roles(UserRole.FINANCE, UserRole.ADMIN, UserRole.OWNER)
   createExpense(@CurrentUser() user: AuthUser, @Body() dto: CreateExpenseDto) {
     return this.financeService.createExpense(user.id, dto)
   }
@@ -88,6 +88,26 @@ export class FinanceController {
     return this.financeService.getExpenses(filters)
   }
 
+  @Get("dashboard")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.FINANCE)
+  getDashboard(@Query("period") period: "day" | "week" | "month" = "month") {
+    return this.financeService.getDashboard(period)
+  }
+
+  @Get("cashflow")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.FINANCE)
+  getCashflow(
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+  ) {
+    return this.financeService.getCashflow(
+      from ? new Date(from) : undefined,
+      to ? new Date(to) : undefined,
+    )
+  }
+
   @Get("cashbox/history")
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.OWNER, UserRole.FINANCE)
@@ -96,5 +116,22 @@ export class FinanceController {
     @Query("cursor") cursor?: string,
   ) {
     return this.financeService.getCashboxHistory(limit, cursor)
+  }
+
+  @Get("commissions")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.FINANCE)
+  getCommissions(
+    @Query("status") status?: string,
+    @Query("personnelId") personnelId?: string,
+    @Query("page") page?: string,
+    @Query("limit") limit?: string,
+  ) {
+    return this.financeService.getCommissions({
+      status,
+      personnelId,
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 20,
+    })
   }
 }

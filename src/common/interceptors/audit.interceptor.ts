@@ -3,66 +3,57 @@ import {
   NestInterceptor,
   ExecutionContext,
   CallHandler,
-  Optional,
   Logger,
 } from "@nestjs/common"
 import { Observable } from "rxjs"
 import { tap } from "rxjs/operators"
 import { PrismaService } from "../prisma/prisma.service"
 import { IntegrityHashService } from "../crypto/integrity-hash.service"
-import { randomUUID } from "node:crypto"
+import { AuditSeverity } from "@prisma/client"
+import { randomUUID, createHmac } from "node:crypto"
 
 const SENSITIVE_FIELDS = [
-  "password",
-  "token",
-  "mfaSecret",
-  "passwordHash",
-  "refreshToken",
-  "accessToken",
-  "secret",
-  "pin",
-  "ssn",
+  "password", "token", "mfaSecret", "passwordHash",
+  "refreshToken", "accessToken", "secret", "pin", "ssn",
 ]
 
 const FINANCIAL_KEYWORDS = [
-  "payment",
-  "pago",
-  "transaction",
-  "transaccion",
-  "invoice",
-  "factura",
-  "billing",
-  "facturacion",
-  "refund",
-  "reembolso",
-  "charge",
-  "cobro",
+  "payment", "pago", "transaction", "transaccion",
+  "invoice", "factura", "billing", "facturacion",
+  "refund", "reembolso", "charge", "cobro", "finance", "cashbox",
+]
+
+const CRITICAL_ROUTES = [
+  "/api/v1/finance", "/api/v1/orders", "/api/v1/inventory",
+  "/api/v1/purchases", "/api/v1/payments",
 ]
 
 type MutationAction = "CREATE" | "UPDATE" | "DELETE"
+
+function fallbackSha256(payload: string): string {
+  return createHmac("sha256", "arellan-fallback-key-v3").update(payload).digest("hex")
+}
 
 @Injectable()
 export class AuditInterceptor implements NestInterceptor {
   private readonly logger = new Logger(AuditInterceptor.name)
 
   constructor(
-    @Optional() private readonly prisma?: PrismaService,
-    @Optional() private readonly integrityHash?: IntegrityHashService,
+    private readonly prisma: PrismaService,
+    private readonly integrityHash: IntegrityHashService,
   ) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const request = context.switchToHttp().getRequest()
     const user = request.user
     const method = request.method
-    const url = request.url
+    const url = request.originalUrl ?? request.url
 
-    if (!user || !this.prisma || ["GET", "HEAD", "OPTIONS"].includes(method)) {
+    if (!user || ["GET", "HEAD", "OPTIONS"].includes(method)) {
       return next.handle()
     }
 
-    const correlationId =
-      request.headers["x-correlation-id"] ?? randomUUID()
-
+    const correlationId = request.headers["x-correlation-id"] ?? randomUUID()
     const beforeState = this.captureBeforeState(method, request)
 
     return next.handle().pipe(
@@ -78,18 +69,26 @@ export class AuditInterceptor implements NestInterceptor {
 
         const mutationAction = this.toMutationAction(method)
 
-        const integrityHash = this.integrityHash
-          ? this.integrityHash.generateMutationHash({
-              entity,
-              entityId: entityId ?? "unknown",
-              action: mutationAction,
-              before: beforeState ?? null,
-              after: afterState ?? null,
-            })
-          : undefined
+        let integrityHash: string
+        try {
+          integrityHash = this.integrityHash.generateMutationHash({
+            entity,
+            entityId: entityId ?? "unknown",
+            action: mutationAction,
+            before: beforeState ?? null,
+            after: afterState ?? null,
+          })
+        } catch {
+          integrityHash = fallbackSha256(
+            `${entity}:${entityId ?? "unknown"}:${mutationAction}:${correlationId}`
+          )
+        }
+
+        const isCritical = this.isCriticalRoute(url)
+        const timestamp = new Date().toISOString()
 
         try {
-          await this.prisma!.auditLog.create({
+          await this.prisma.auditLog.create({
             data: {
               userId: user.id,
               userName: user.name || user.email,
@@ -97,107 +96,74 @@ export class AuditInterceptor implements NestInterceptor {
               action,
               entity,
               entityId,
-              beforeState: (beforeState as any) ?? undefined,
-              afterState: (afterState as any) ?? undefined,
+              beforeState: (beforeState ?? undefined) as any,
+              afterState: (afterState ?? undefined) as any,
               integrityHash,
-              ipAddress: request.ip || "unknown",
+              ipAddress: request.ip || request.headers["x-forwarded-for"] || "unknown",
               userAgent: request.headers["user-agent"] || undefined,
               severity,
               metadata: {
                 method,
                 path: url,
                 correlationId,
+                timestamp,
                 statusCode: responseBody?.statusCode ?? 200,
-              },
+                isCriticalRoute: isCritical,
+              } as any,
             },
           })
-        } catch {
-          // Audit failure should not break the request
+
+          if (isCritical && severity === "CRITICAL") {
+            this.logger.warn(
+              `[AUDIT] CRITICAL mutation on ${url} by ${user.email ?? user.id} [${correlationId}]`
+            )
+          }
+        } catch (err) {
+          this.logger.error(`Audit log write failed: ${(err as Error).message}`)
         }
       }),
     )
   }
 
-  // ---------------------------------------------------------------
-  // Action builder
-  // ---------------------------------------------------------------
+  private isCriticalRoute(url: string): boolean {
+    return CRITICAL_ROUTES.some((route) => url.toLowerCase().startsWith(route.toLowerCase()))
+  }
+
   private buildAction(method: string, url: string): string {
     const entity = this.extractEntity(url).toUpperCase()
     switch (method) {
-      case "POST":
-        return `${entity}_CREATED`
-      case "PATCH":
-      case "PUT":
-        return `${entity}_UPDATED`
-      case "DELETE":
-        return `${entity}_DELETED`
-      default:
-        return `${entity}_MODIFIED`
+      case "POST": return `${entity}_CREATED`
+      case "PATCH": case "PUT": return `${entity}_UPDATED`
+      case "DELETE": return `${entity}_DELETED`
+      default: return `${entity}_MODIFIED`
     }
   }
 
-  // ---------------------------------------------------------------
-  // Severity detection
-  // ---------------------------------------------------------------
-  private detectSeverity(
-    method: string,
-    action: string,
-    url: string,
-  ): string {
-    if (url.toLowerCase().includes("force-logout")) {
-      return "SECURITY_ALERT"
-    }
+  private detectSeverity(method: string, action: string, url: string): AuditSeverity {
+    if (url.toLowerCase().includes("force-logout")) return "SECURITY_ALERT"
 
     const isFinancial = FINANCIAL_KEYWORDS.some(
-      (k) =>
-        url.toLowerCase().includes(k) || action.toLowerCase().includes(k),
+      (k) => url.toLowerCase().includes(k) || action.toLowerCase().includes(k),
     )
-    if (isFinancial) {
-      return "CRITICAL"
-    }
-
-    if (method === "DELETE" || action.includes("LOGOUT")) {
-      return "WARNING"
-    }
-
-    if (action.includes("CANCEL")) {
-      return "WARNING"
-    }
-
+    if (isFinancial) return "CRITICAL"
+    if (method === "DELETE" || action.includes("LOGOUT")) return "WARNING"
+    if (action.includes("CANCEL")) return "WARNING"
     return "INFO"
   }
 
-  // ---------------------------------------------------------------
-  // Before/after state capture
-  // ---------------------------------------------------------------
-  private captureBeforeState(
-    method: string,
-    request: any,
-  ): Record<string, unknown> | undefined {
-    if (method === "PATCH" || method === "PUT") {
-      return this.sanitize(request.body)
-    }
-
+  private captureBeforeState(method: string, request: any): Record<string, unknown> | undefined {
+    if (method === "PATCH" || method === "PUT") return this.sanitize(request.body)
     if (method === "DELETE") {
       const params = { ...request.params }
-      if (Object.keys(params).length > 0) {
-        return this.sanitize(params)
-      }
+      return Object.keys(params).length > 0 ? this.sanitize(params) : undefined
     }
-
     return undefined
   }
 
-  // ---------------------------------------------------------------
-  // Sanitization – strip sensitive fields recursively
-  // ---------------------------------------------------------------
-  private sanitize(
-    obj: Record<string, unknown> | undefined | null,
-  ): Record<string, unknown> | undefined {
+  private sanitize(obj: Record<string, unknown> | undefined | null): Record<string, unknown> | undefined {
     if (!obj || typeof obj !== "object") return undefined
 
     const sanitized: Record<string, unknown> = {}
-
     for (const [key, value] of Object.entries(obj)) {
       if (SENSITIVE_FIELDS.some((f) => key.toLowerCase() === f.toLowerCase())) {
         sanitized[key] = "***REDACTED***"
@@ -207,13 +173,9 @@ export class AuditInterceptor implements NestInterceptor {
         sanitized[key] = value
       }
     }
-
     return sanitized
   }
 
-  // ---------------------------------------------------------------
-  // Entity helpers
-  // ---------------------------------------------------------------
   private extractEntity(url: string): string {
     const parts = url.split("/").filter(Boolean)
     const apiIndex = parts.findIndex((p) => p === "api")
@@ -224,20 +186,12 @@ export class AuditInterceptor implements NestInterceptor {
     return request.params?.id ?? undefined
   }
 
-  // ---------------------------------------------------------------
-  // Map HTTP method → mutation action for integrity hash
-  // ---------------------------------------------------------------
   private toMutationAction(method: string): MutationAction {
     switch (method) {
-      case "POST":
-        return "CREATE"
-      case "PATCH":
-      case "PUT":
-        return "UPDATE"
-      case "DELETE":
-        return "DELETE"
-      default:
-        return "UPDATE"
+      case "POST": return "CREATE"
+      case "PATCH": case "PUT": return "UPDATE"
+      case "DELETE": return "DELETE"
+      default: return "UPDATE"
     }
   }
 }

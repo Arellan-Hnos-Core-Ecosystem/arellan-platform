@@ -9,7 +9,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ForceLogoutDto = exports.ChangePasswordDto = exports.RegisterDto = exports.MfaVerifyDto = exports.LoginDto = void 0;
+exports.MechanicLoginDto = exports.ForceLogoutDto = exports.ChangePasswordDto = exports.RegisterDto = exports.MfaVerifyDto = exports.LoginDto = void 0;
 const class_validator_1 = require("class-validator");
 const client_1 = require("@prisma/client");
 class LoginDto {
@@ -92,4 +92,13 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], ForceLogoutDto.prototype, "userId", void 0);
+class MechanicLoginDto {
+    pin;
+}
+exports.MechanicLoginDto = MechanicLoginDto;
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MinLength)(6, { message: "PIN debe tener 6 digitos" }),
+    __metadata("design:type", String)
+], MechanicLoginDto.prototype, "pin", void 0);
 //# sourceMappingURL=auth.dto.js.map

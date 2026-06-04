@@ -209,7 +209,7 @@ export class PurchasesService {
       throw new ConflictException("No se pueden recibir items de una compra cancelada")
     }
 
-    if (![PurchaseStatus.CONFIRMED, PurchaseStatus.SENT, PurchaseStatus.PARTIALLY_RECEIVED].includes(purchase.status)) {
+    if (!( [PurchaseStatus.CONFIRMED, PurchaseStatus.SENT, PurchaseStatus.PARTIALLY_RECEIVED] as PurchaseStatus[] ).includes(purchase.status)) {
       throw new ConflictException("La compra debe estar en estado CONFIRMED, SENT o PARTIALLY_RECEIVED")
     }
 

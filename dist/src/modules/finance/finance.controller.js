@@ -51,8 +51,22 @@ let FinanceController = class FinanceController {
     getExpenses(filters) {
         return this.financeService.getExpenses(filters);
     }
+    getDashboard(period = "month") {
+        return this.financeService.getDashboard(period);
+    }
+    getCashflow(from, to) {
+        return this.financeService.getCashflow(from ? new Date(from) : undefined, to ? new Date(to) : undefined);
+    }
     getCashboxHistory(limit, cursor) {
         return this.financeService.getCashboxHistory(limit, cursor);
+    }
+    getCommissions(status, personnelId, page, limit) {
+        return this.financeService.getCommissions({
+            status,
+            personnelId,
+            page: page ? parseInt(page, 10) : 1,
+            limit: limit ? parseInt(limit, 10) : 20,
+        });
     }
 };
 exports.FinanceController = FinanceController;
@@ -97,7 +111,7 @@ __decorate([
 __decorate([
     (0, common_1.Post)("expenses"),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard, mfa_required_guard_1.MfaRequiredGuard),
-    (0, roles_decorator_1.Roles)(client_1.UserRole.FINANCE, client_1.UserRole.ADMIN),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.FINANCE, client_1.UserRole.ADMIN, client_1.UserRole.OWNER),
     __param(0, (0, current_user_decorator_1.CurrentUser)()),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -134,6 +148,25 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], FinanceController.prototype, "getExpenses", null);
 __decorate([
+    (0, common_1.Get)("dashboard"),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.OWNER, client_1.UserRole.ADMIN, client_1.UserRole.FINANCE),
+    __param(0, (0, common_1.Query)("period")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], FinanceController.prototype, "getDashboard", null);
+__decorate([
+    (0, common_1.Get)("cashflow"),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.OWNER, client_1.UserRole.FINANCE),
+    __param(0, (0, common_1.Query)("from")),
+    __param(1, (0, common_1.Query)("to")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", void 0)
+], FinanceController.prototype, "getCashflow", null);
+__decorate([
     (0, common_1.Get)("cashbox/history"),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
     (0, roles_decorator_1.Roles)(client_1.UserRole.OWNER, client_1.UserRole.FINANCE),
@@ -143,6 +176,18 @@ __decorate([
     __metadata("design:paramtypes", [Number, String]),
     __metadata("design:returntype", void 0)
 ], FinanceController.prototype, "getCashboxHistory", null);
+__decorate([
+    (0, common_1.Get)("commissions"),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.OWNER, client_1.UserRole.ADMIN, client_1.UserRole.FINANCE),
+    __param(0, (0, common_1.Query)("status")),
+    __param(1, (0, common_1.Query)("personnelId")),
+    __param(2, (0, common_1.Query)("page")),
+    __param(3, (0, common_1.Query)("limit")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, String, String]),
+    __metadata("design:returntype", void 0)
+], FinanceController.prototype, "getCommissions", null);
 exports.FinanceController = FinanceController = __decorate([
     (0, common_1.Controller)("finance"),
     __metadata("design:paramtypes", [finance_service_1.FinanceService])

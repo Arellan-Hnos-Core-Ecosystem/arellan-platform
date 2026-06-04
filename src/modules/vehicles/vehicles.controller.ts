@@ -24,6 +24,13 @@ export class VehiclesController {
     return this.vehiclesService.findByPlate(plate)
   }
 
+  @Get("workshop-fleet")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.OWNER)
+  getWorkshopFleet() {
+    return this.vehiclesService.getWorkshopFleet()
+  }
+
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.OWNER)

@@ -1,11 +1,13 @@
 import {
   Controller,
   Get,
+  Post,
   Patch,
   Body,
   Param,
   Query,
   UseGuards,
+  Req,
 } from "@nestjs/common"
 import { PersonnelService } from "./personnel.service"
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard"
@@ -14,7 +16,7 @@ import { Roles } from "../../common/decorators/roles.decorator"
 import { CurrentUser } from "../../common/decorators/current-user.decorator"
 import { AuthUser } from "../auth/auth.service"
 import { UserRole } from "@prisma/client"
-import { PersonnelFilterDto, UpdateRoleDto, UpdateStatusDto } from "./dto/personnel.dto"
+import { PersonnelFilterDto, UpdateRoleDto, UpdateStatusDto, CheckInOutDto, AuthorizeVehicleUsageDto } from "./dto/personnel.dto"
 
 @Controller("personnel")
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -23,23 +25,14 @@ export class PersonnelController {
 
   @Get()
   @Roles(UserRole.ADMIN, UserRole.OWNER)
-  findAll(
-    @CurrentUser() user: AuthUser,
-    @Query() filters: PersonnelFilterDto,
-  ) {
-    return this.personnelService.findAll(
-      user.role,
-      filters.role,
-      filters.status,
-      filters.limit,
-      filters.cursor,
-    )
+  findAll(@Query() filters: PersonnelFilterDto) {
+    return this.personnelService.findAll(filters)
   }
 
   @Get(":id")
   @Roles(UserRole.ADMIN, UserRole.OWNER, UserRole.MECHANIC, UserRole.TRAINEE)
-  findOne(@Param("id") id: string, @CurrentUser() user: AuthUser) {
-    return this.personnelService.findOne(id, user.id, user.role)
+  findOne(@Param("id") id: string) {
+    return this.personnelService.findOne(id)
   }
 
   @Patch(":id/role")
@@ -59,5 +52,48 @@ export class PersonnelController {
     @Body() dto: UpdateStatusDto,
   ) {
     return this.personnelService.updateStatus(id, dto.status)
+  }
+
+  @Post("attendance/check-in")
+  @UseGuards(JwtAuthGuard)
+  checkIn(@CurrentUser() user: AuthUser, @Body() dto: CheckInOutDto) {
+    return this.personnelService.checkInByUser(user.id, dto.notes)
+  }
+
+  @Post("attendance/check-out")
+  @UseGuards(JwtAuthGuard)
+  checkOut(@CurrentUser() user: AuthUser, @Body() dto: CheckInOutDto) {
+    return this.personnelService.checkOutByUser(user.id, dto.notes)
+  }
+
+  @Get("attendance/today")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.OWNER)
+  getAttendanceToday() {
+    return this.personnelService.getTodayAttendance()
+  }
+
+  @Post("vehicle-usage/authorize")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.OWNER)
+  authorizeVehicleUsage(
+    @Body() dto: AuthorizeVehicleUsageDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.personnelService.authorizeVehicleUsage(dto, user.id, user.role)
+  }
+
+  @Get("vehicle-usage/active")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.OWNER)
+  getActiveVehicleUsages() {
+    return this.personnelService.getActiveVehicleUsages()
+  }
+
+  @Get("vehicle-usage/overdue")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.OWNER)
+  getOverdueVehicleUsages() {
+    return this.personnelService.getOverdueVehicleUsages()
   }
 }

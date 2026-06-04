@@ -47,6 +47,21 @@ export class AssignMechanicDto {
   mechanicId: string
 }
 
+export class ApplyDiscountDto {
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 }, { message: "Monto de descuento invalido" })
+  discountAmount?: number
+
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 }, { message: "Porcentaje de descuento invalido" })
+  @Min(0)
+  @Max(100)
+  discountPercentage?: number
+
+  @IsString({ message: "Razon del descuento requerida" })
+  reason: string
+}
+
 export class OrderFilterDto {
   @IsOptional()
   @IsEnum(OrderStatus, { message: "Estado de orden invalido" })

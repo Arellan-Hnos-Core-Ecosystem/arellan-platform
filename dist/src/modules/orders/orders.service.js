@@ -14,6 +14,7 @@ exports.OrdersService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../common/prisma/prisma.service");
 const client_1 = require("@prisma/client");
+const realtime_gateway_1 = require("../../common/gateway/realtime.gateway");
 const VALID_TRANSITIONS = {
     RECEIVED: [client_1.OrderStatus.IN_DIAGNOSIS, client_1.OrderStatus.CANCELLED],
     IN_DIAGNOSIS: [client_1.OrderStatus.BUDGETED, client_1.OrderStatus.CANCELLED],
@@ -33,11 +34,13 @@ const ORDER_INCLUDE = {
 };
 let OrdersService = OrdersService_1 = class OrdersService {
     prisma;
+    wsGateway;
     logger = new common_1.Logger(OrdersService_1.name);
-    constructor(prisma) {
+    constructor(prisma, wsGateway) {
         this.prisma = prisma;
+        this.wsGateway = wsGateway;
     }
-    async create(dto) {
+    async create(dto, userId) {
         const year = new Date().getFullYear();
         const count = await this.prisma.workOrder.count({
             where: { number: { startsWith: `OT-${year}-` } },
@@ -50,8 +53,15 @@ let OrdersService = OrdersService_1 = class OrdersService {
                 clientId: dto.clientId,
                 mechanicId: dto.mechanicId,
                 description: dto.description,
+                createdBy: userId,
             },
             include: ORDER_INCLUDE,
+        });
+        this.wsGateway.emitOrderCreated({
+            orderId: order.id,
+            orderNumber: order.number,
+            clientName: order.client.firstName,
+            vehiclePlate: order.vehicle.plate,
         });
         this.logger.log(`OT ${number} creada`);
         return order;
@@ -59,12 +69,10 @@ let OrdersService = OrdersService_1 = class OrdersService {
     async findAll(filters) {
         const { status, mechanicId, from, to, limit = 20, cursor } = filters;
         const where = {};
-        if (status) {
+        if (status)
             where.status = status;
-        }
-        if (mechanicId) {
+        if (mechanicId)
             where.mechanicId = mechanicId;
-        }
         if (from || to) {
             where.receivedAt = {};
             if (from)
@@ -90,40 +98,33 @@ let OrdersService = OrdersService_1 = class OrdersService {
             where: { id },
             include: {
                 ...ORDER_INCLUDE,
-                photos: true,
                 parts: { include: { item: true } },
                 statusHistory: { orderBy: { timestamp: "desc" } },
+                payments: { select: { id: true, method: true, amount: true, paidAt: true } },
             },
         });
-        if (!order) {
+        if (!order)
             throw new common_1.NotFoundException("Orden de trabajo no encontrada");
-        }
         return order;
     }
     async update(id, dto) {
         const order = await this.prisma.workOrder.findUnique({ where: { id } });
-        if (!order) {
+        if (!order)
             throw new common_1.NotFoundException("Orden de trabajo no encontrada");
-        }
         if (dto.status && order.status === client_1.OrderStatus.CANCELLED) {
             throw new common_1.ConflictException("No se puede modificar una orden cancelada");
         }
         const data = {};
-        if (dto.status !== undefined) {
+        if (dto.status !== undefined)
             data.status = dto.status;
-        }
-        if (dto.diagnosis !== undefined) {
+        if (dto.diagnosis !== undefined)
             data.diagnosis = dto.diagnosis;
-        }
-        if (dto.laborCost !== undefined) {
+        if (dto.laborCost !== undefined)
             data.laborCost = new client_1.Prisma.Decimal(dto.laborCost);
-        }
-        if (dto.partsCost !== undefined) {
+        if (dto.partsCost !== undefined)
             data.partsCost = new client_1.Prisma.Decimal(dto.partsCost);
-        }
-        if (dto.estimatedDelivery !== undefined) {
+        if (dto.estimatedDelivery !== undefined)
             data.estimatedDelivery = new Date(dto.estimatedDelivery);
-        }
         if (dto.laborCost !== undefined || dto.partsCost !== undefined) {
             const currentLabor = dto.laborCost !== undefined ? new client_1.Prisma.Decimal(dto.laborCost) : order.laborCost ?? new client_1.Prisma.Decimal(0);
             const currentParts = dto.partsCost !== undefined ? new client_1.Prisma.Decimal(dto.partsCost) : order.partsCost ?? new client_1.Prisma.Decimal(0);
@@ -139,18 +140,23 @@ let OrdersService = OrdersService_1 = class OrdersService {
     }
     async updateStatus(id, dto, userId) {
         const order = await this.prisma.workOrder.findUnique({ where: { id } });
-        if (!order) {
+        if (!order)
             throw new common_1.NotFoundException("Orden de trabajo no encontrada");
-        }
         const allowed = VALID_TRANSITIONS[order.status];
         if (!allowed.includes(dto.status)) {
             throw new common_1.ConflictException(`No se puede cambiar de ${order.status} a ${dto.status}. ` +
                 `Transiciones permitidas: ${allowed.length ? allowed.join(", ") : "ninguna"}`);
         }
-        const updateData = { status: dto.status };
         if (dto.status === client_1.OrderStatus.DELIVERED) {
-            updateData.deliveredAt = new Date();
+            await this.validateVehicleDelivery(id);
         }
+        const vehicle = await this.prisma.vehicle.findUnique({
+            where: { id: order.vehicleId },
+            select: { plate: true },
+        });
+        const updateData = { status: dto.status };
+        if (dto.status === client_1.OrderStatus.DELIVERED)
+            updateData.deliveredAt = new Date();
         const [updated] = await this.prisma.$transaction([
             this.prisma.workOrder.update({
                 where: { id },
@@ -158,24 +164,69 @@ let OrdersService = OrdersService_1 = class OrdersService {
                 include: ORDER_INCLUDE,
             }),
             this.prisma.orderStatusHistory.create({
-                data: {
-                    orderId: id,
-                    status: dto.status,
-                    changedBy: userId,
-                },
+                data: { orderId: id, status: dto.status, changedBy: userId },
             }),
         ]);
+        this.wsGateway.emitOrderStatusChanged({
+            orderId: id,
+            oldStatus: order.status,
+            newStatus: dto.status,
+            updatedBy: userId,
+        });
+        this.wsGateway.broadcastOrderUpdate({
+            orderId: id,
+            orderNumber: order.number,
+            newStatus: dto.status,
+            vehiclePlate: vehicle?.plate ?? "",
+            changedById: userId,
+            timestamp: new Date().toISOString(),
+        });
         this.logger.log(`OT ${updated.number}: ${order.status} → ${dto.status}`);
         return updated;
     }
+    async validateVehicleDelivery(orderId) {
+        const order = await this.prisma.workOrder.findUnique({
+            where: { id: orderId },
+            include: {
+                parts: { include: { item: true } },
+                payments: true,
+            },
+        });
+        if (!order)
+            throw new common_1.NotFoundException("Orden no encontrada para validacion de entrega");
+        const laborCost = Number(order.laborCost ?? 0);
+        const partsCost = order.parts.reduce((sum, p) => sum + Number(p.unitPrice) * p.quantity, 0);
+        const totalRequired = laborCost + partsCost;
+        const totalPaid = order.payments.reduce((sum, p) => sum + Number(p.amount), 0);
+        if (totalRequired <= 0) {
+            this.logger.warn(`OT ${order.number}: entrega sin costos registrados`);
+            return;
+        }
+        if (totalPaid < totalRequired) {
+            const pending = totalRequired - totalPaid;
+            throw new common_1.ForbiddenException({
+                message: `No se puede entregar el vehiculo. Monto pendiente: S/ ${pending.toFixed(2)}`,
+                code: "DELIVERY_PAYMENT_MISMATCH",
+                details: {
+                    laborCost,
+                    partsCost,
+                    totalRequired,
+                    totalPaid,
+                    pending,
+                },
+            });
+        }
+        const suspiciousYape = order.payments.some((p) => p.method === client_1.PaymentMethod.YAPE && Number(p.amount) >= 500);
+        if (suspiciousYape) {
+            this.logger.warn(`OT ${order.number}: entrega con pago Yape >= S/500 - verificar manualmente`);
+        }
+    }
     async softDelete(id) {
         const order = await this.prisma.workOrder.findUnique({ where: { id } });
-        if (!order) {
+        if (!order)
             throw new common_1.NotFoundException("Orden de trabajo no encontrada");
-        }
-        if (order.status === client_1.OrderStatus.CANCELLED) {
+        if (order.status === client_1.OrderStatus.CANCELLED)
             throw new common_1.ConflictException("La orden ya esta cancelada");
-        }
         const updated = await this.prisma.workOrder.update({
             where: { id },
             data: { status: client_1.OrderStatus.CANCELLED },
@@ -186,9 +237,8 @@ let OrdersService = OrdersService_1 = class OrdersService {
     }
     async assignMechanic(id, mechanicId) {
         const order = await this.prisma.workOrder.findUnique({ where: { id } });
-        if (!order) {
+        if (!order)
             throw new common_1.NotFoundException("Orden de trabajo no encontrada");
-        }
         if (order.status === client_1.OrderStatus.CANCELLED || order.status === client_1.OrderStatus.DELIVERED) {
             throw new common_1.ConflictException("No se puede reasignar una orden finalizada o cancelada");
         }
@@ -201,12 +251,134 @@ let OrdersService = OrdersService_1 = class OrdersService {
         return updated;
     }
     async findByMechanic(mechanicId, filters) {
-        return this.findAll({ ...filters, mechanicId });
+        const { limit = 20, cursor } = filters;
+        const where = { mechanicId };
+        const take = limit + 1;
+        const orders = await this.prisma.workOrder.findMany({
+            where,
+            take,
+            orderBy: { id: "asc" },
+            ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+            include: {
+                ...ORDER_INCLUDE,
+                parts: { include: { item: { select: { id: true, name: true, sku: true } } } },
+                photosRel: { select: { id: true, url: true, type: true } },
+            },
+        });
+        const hasMore = orders.length > limit;
+        const data = hasMore ? orders.slice(0, limit) : orders;
+        const nextCursor = hasMore ? data[data.length - 1].id : null;
+        return { data, nextCursor };
+    }
+    async getSummaryStats() {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const [activeOrders, receivedToday, completedToday, deliveredToday, totalOrders, pendingPayment,] = await Promise.all([
+            this.prisma.workOrder.count({ where: { status: { notIn: ["DELIVERED", "CANCELLED"] } } }),
+            this.prisma.workOrder.count({ where: { receivedAt: { gte: today, lt: tomorrow } } }),
+            this.prisma.workOrder.count({ where: { completedAt: { gte: today, lt: tomorrow } } }),
+            this.prisma.workOrder.count({ where: { deliveredAt: { gte: today, lt: tomorrow } } }),
+            this.prisma.workOrder.count(),
+            this.prisma.workOrder.count({
+                where: { status: { in: ["READY", "IN_REVIEW"] }, paymentStatus: { in: ["DRAFT", "ISSUED"] } },
+            }),
+        ]);
+        const todayRevenue = await this.prisma.financialTransaction.aggregate({
+            where: { type: "PAYMENT", createdAt: { gte: today, lt: tomorrow } },
+            _sum: { amount: true },
+        });
+        const lowStock = await this.prisma.inventoryItem.count({
+            where: { stock: { lte: this.prisma.inventoryItem.fields.minStock } },
+        });
+        return {
+            activeOrders, receivedToday, completedToday, deliveredToday,
+            totalOrders, pendingPayment,
+            todayRevenue: Number(todayRevenue._sum.amount ?? 0),
+            lowStockCount: lowStock,
+        };
+    }
+    async addItem(orderId, dto, userId) {
+        const order = await this.prisma.workOrder.findUnique({ where: { id: orderId } });
+        if (!order)
+            throw new common_1.NotFoundException("Orden no encontrada");
+        if (["DELIVERED", "CANCELLED"].includes(order.status)) {
+            throw new common_1.ConflictException("No se pueden modificar ordenes finalizadas");
+        }
+        const item = await this.prisma.inventoryItem.findUnique({ where: { id: dto.itemId } });
+        if (!item)
+            throw new common_1.NotFoundException("Item de inventario no encontrado");
+        if (item.stock < dto.quantity) {
+            throw new common_1.ConflictException(`Stock insuficiente. Disponible: ${item.stock}, solicitado: ${dto.quantity}`);
+        }
+        const [orderPart] = await this.prisma.$transaction([
+            this.prisma.workOrderPart.create({
+                data: { orderId, itemId: dto.itemId, quantity: dto.quantity, unitPrice: dto.unitPrice },
+            }),
+            this.prisma.inventoryMovement.create({
+                data: { itemId: dto.itemId, type: "OUT", quantity: dto.quantity, orderId, authorizedBy: userId, unitCost: item.unitPrice, justification: `Consumo en OT ${order.number}` },
+            }),
+            this.prisma.inventoryItem.update({
+                where: { id: dto.itemId },
+                data: { stock: item.stock - dto.quantity },
+            }),
+            this.prisma.workOrderEvent.create({
+                data: { workOrderId: orderId, event: "PART_ADDED", description: `Repuesto ${item.name} x${dto.quantity} agregado`, userId },
+            }),
+        ]);
+        this.logger.log(`Item ${item.sku} x${dto.quantity} agregado a OT ${order.number}`);
+        return orderPart;
+    }
+    async applyDiscount(orderId, dto, userId, userRole) {
+        const order = await this.prisma.workOrder.findUnique({ where: { id: orderId } });
+        if (!order)
+            throw new common_1.NotFoundException("Orden no encontrada");
+        if (["DELIVERED", "CANCELLED"].includes(order.status)) {
+            throw new common_1.ConflictException("No se puede aplicar descuento a ordenes finalizadas");
+        }
+        const total = Number(order.totalCost ?? order.finalAmount ?? 0);
+        const discountAmount = dto.discountAmount
+            ?? (total * (dto.discountPercentage ?? 0) / 100);
+        const discountPct = total > 0 ? (discountAmount / total) * 100 : 0;
+        if (discountPct > 20 && userRole !== client_1.UserRole.OWNER) {
+            const approval = await this.prisma.approval.create({
+                data: {
+                    type: client_1.ApprovalType.DISCOUNT,
+                    status: client_1.ApprovalStatus.PENDING,
+                    title: `Descuento ${discountPct.toFixed(1)}% en orden ${order.number}`,
+                    description: dto.reason,
+                    amount: discountAmount,
+                    requestedById: userId,
+                },
+            });
+            this.wsGateway.emitApprovalRequested({
+                approvalId: approval.id,
+                type: "DISCOUNT",
+                amount: discountAmount,
+                requestedBy: userId,
+            });
+            return {
+                status: "PENDING_APPROVAL",
+                message: "Descuento > 20% requiere aprobacion de OWNER",
+                approvalId: approval.id,
+            };
+        }
+        const updated = await this.prisma.workOrder.update({
+            where: { id: orderId },
+            data: {
+                discount: discountAmount,
+                finalAmount: Math.max(0, total - discountAmount),
+            },
+        });
+        this.logger.log(`Descuento ${discountPct.toFixed(1)}% aplicado a OT ${order.number}`);
+        return updated;
     }
 };
 exports.OrdersService = OrdersService;
 exports.OrdersService = OrdersService = OrdersService_1 = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+        realtime_gateway_1.RealtimeGateway])
 ], OrdersService);
 //# sourceMappingURL=orders.service.js.map

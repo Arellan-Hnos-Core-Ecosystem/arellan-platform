@@ -304,6 +304,7 @@ model Personnel {
   firstName      String
   lastName       String
   dni            String        @unique
+  pin            String?       @unique
   phone          String?
   emergencyPhone String?
   address        String?

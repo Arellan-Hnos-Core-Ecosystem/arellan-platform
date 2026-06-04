@@ -1,5 +1,4 @@
 import { Module } from "@nestjs/common"
-import { OrdersGateway } from "./orders.gateway"
 import { WsAuthMiddleware } from "./ws-auth.middleware"
 import { JwtModule } from "@nestjs/jwt"
 import { ConfigModule, ConfigService } from "@nestjs/config"
@@ -14,7 +13,7 @@ import { ConfigModule, ConfigService } from "@nestjs/config"
       }),
     }),
   ],
-  providers: [OrdersGateway, WsAuthMiddleware],
-  exports: [OrdersGateway],
+  providers: [WsAuthMiddleware],
+  exports: [WsAuthMiddleware],
 })
 export class GatewaysModule {}

@@ -224,3 +224,9 @@ export class AttendanceQueryDto {
   @Max(2100)
   year?: number
 }
+
+export class CheckInOutDto {
+  @IsOptional()
+  @IsString()
+  notes?: string
+}

@@ -18,6 +18,11 @@ export declare class UpdateStatusDto {
 export declare class AssignMechanicDto {
     mechanicId: string;
 }
+export declare class ApplyDiscountDto {
+    discountAmount?: number;
+    discountPercentage?: number;
+    reason: string;
+}
 export declare class OrderFilterDto {
     status?: OrderStatus;
     mechanicId?: string;

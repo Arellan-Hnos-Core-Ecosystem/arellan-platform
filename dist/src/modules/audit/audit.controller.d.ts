@@ -10,15 +10,17 @@ export declare class AuditController {
         id: string;
         role: string;
         createdAt: Date;
-        userId: string;
+        userName: string;
         action: string;
         entity: string | null;
-        userName: string;
         entityId: string | null;
         beforeState: import("@prisma/client/runtime/library").JsonValue | null;
         afterState: import("@prisma/client/runtime/library").JsonValue | null;
+        integrityHash: string | null;
         ipAddress: string;
         userAgent: string | null;
         metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        severity: import(".prisma/client").$Enums.AuditSeverity;
+        userId: string;
     }>;
 }

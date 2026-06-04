@@ -51,3 +51,9 @@ export class ForceLogoutDto {
   @IsString()
   userId: string
 }
+
+export class MechanicLoginDto {
+  @IsString()
+  @MinLength(6, { message: "PIN debe tener 6 digitos" })
+  pin: string
+}

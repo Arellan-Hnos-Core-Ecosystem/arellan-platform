@@ -81,52 +81,52 @@ async function main() {
   })
   const pc = await prisma.personnel.upsert({
     where: { dni: "45879231" },
-    update: { accountId: ca.id, firstName: "Carlos", lastName: "Quispe", phone: "912345678", emergencyPhone: "912345670", address: "Av. Primavera 456, Surquillo", contractType: "FULL_TIME", position: "Mecánico Senior", department: "Taller", salary: 3500, startDate: new Date("2024-01-10T00:00:00-05:00") },
-    create: { accountId: ca.id, firstName: "Carlos", lastName: "Quispe", dni: "45879231", phone: "912345678", emergencyPhone: "912345670", address: "Av. Primavera 456, Surquillo", contractType: "FULL_TIME", position: "Mecánico Senior", department: "Taller", salary: 3500, salaryType: "MONTHLY", startDate: new Date("2024-01-10T00:00:00-05:00") },
+    update: { accountId: ca.id, firstName: "Carlos", lastName: "Quispe", pin: "147258", phone: "912345678", emergencyPhone: "912345670", address: "Av. Primavera 456, Surquillo", contractType: "FULL_TIME", position: "Mecánico Senior", department: "Taller", salary: 3500, startDate: new Date("2024-01-10T00:00:00-05:00") },
+    create: { accountId: ca.id, firstName: "Carlos", lastName: "Quispe", dni: "45879231", pin: "147258", phone: "912345678", emergencyPhone: "912345670", address: "Av. Primavera 456, Surquillo", contractType: "FULL_TIME", position: "Mecánico Senior", department: "Taller", salary: 3500, salaryType: "MONTHLY", startDate: new Date("2024-01-10T00:00:00-05:00") },
   })
   const pl = await prisma.personnel.upsert({
     where: { dni: "45879232" },
-    update: { accountId: lu.id, firstName: "Luis", lastName: "Mamani", phone: "912345679", emergencyPhone: "912345671", address: "Calle 8 789, Chorrillos", contractType: "FULL_TIME", position: "Mecánico Junior", department: "Taller", salary: 2500, startDate: new Date("2024-03-15T00:00:00-05:00") },
-    create: { accountId: lu.id, firstName: "Luis", lastName: "Mamani", dni: "45879232", phone: "912345679", emergencyPhone: "912345671", address: "Calle 8 789, Chorrillos", contractType: "FULL_TIME", position: "Mecánico Junior", department: "Taller", salary: 2500, salaryType: "MONTHLY", startDate: new Date("2024-03-15T00:00:00-05:00") },
+    update: { accountId: lu.id, firstName: "Luis", lastName: "Mamani", pin: "258369", phone: "912345679", emergencyPhone: "912345671", address: "Calle 8 789, Chorrillos", contractType: "FULL_TIME", position: "Mecánico Junior", department: "Taller", salary: 2500, startDate: new Date("2024-03-15T00:00:00-05:00") },
+    create: { accountId: lu.id, firstName: "Luis", lastName: "Mamani", dni: "45879232", pin: "258369", phone: "912345679", emergencyPhone: "912345671", address: "Calle 8 789, Chorrillos", contractType: "FULL_TIME", position: "Mecánico Junior", department: "Taller", salary: 2500, salaryType: "MONTHLY", startDate: new Date("2024-03-15T00:00:00-05:00") },
   })
   const pm = await prisma.personnel.upsert({
     where: { dni: "73214589" },
-    update: { accountId: mi.id, firstName: "Miguel", lastName: "Torres", phone: "923456780", emergencyPhone: "923456781", address: "Jr. Las Flores 321, San Borja", contractType: "APPRENTICE", position: "Practicante", department: "Taller", salary: 1025, startDate: new Date("2024-06-01T00:00:00-05:00") },
-    create: { accountId: mi.id, firstName: "Miguel", lastName: "Torres", dni: "73214589", phone: "923456780", emergencyPhone: "923456781", address: "Jr. Las Flores 321, San Borja", contractType: "APPRENTICE", position: "Practicante", department: "Taller", salary: 1025, salaryType: "MONTHLY", startDate: new Date("2024-06-01T00:00:00-05:00") },
+    update: { accountId: mi.id, firstName: "Miguel", lastName: "Torres", pin: "369147", phone: "923456780", emergencyPhone: "923456781", address: "Jr. Las Flores 321, San Borja", contractType: "APPRENTICE", position: "Practicante", department: "Taller", salary: 1025, startDate: new Date("2024-06-01T00:00:00-05:00") },
+    create: { accountId: mi.id, firstName: "Miguel", lastName: "Torres", dni: "73214589", pin: "369147", phone: "923456780", emergencyPhone: "923456781", address: "Jr. Las Flores 321, San Borja", contractType: "APPRENTICE", position: "Practicante", department: "Taller", salary: 1025, salaryType: "MONTHLY", startDate: new Date("2024-06-01T00:00:00-05:00") },
   })
   console.log("  OK 7 personal")
 
   // ========== SUPPLIERS (6) ==========
   console.log("Creando proveedores...")
   const s1 = await prisma.supplier.upsert({
-    where: { ruc: "20123456781" },
+    where: { id: "supplier-001" },
     update: { name: "Importaciones Automotriz del Sur S.A.C.", contactName: "Ricardo Shimabukuro", phone: "945123456", email: "ventas@importacionsur.pe", address: "Av. Argentina 3456, Cercado de Lima", isImporter: false, paymentTerms: "30 días" },
-    create: { name: "Importaciones Automotriz del Sur S.A.C.", contactName: "Ricardo Shimabukuro", phone: "945123456", email: "ventas@importacionsur.pe", address: "Av. Argentina 3456, Cercado de Lima", ruc: "20123456781", isImporter: false, paymentTerms: "30 días" },
+    create: { id: "supplier-001", name: "Importaciones Automotriz del Sur S.A.C.", contactName: "Ricardo Shimabukuro", phone: "945123456", email: "ventas@importacionsur.pe", address: "Av. Argentina 3456, Cercado de Lima", ruc: "20123456781", isImporter: false, paymentTerms: "30 días" },
   })
   const s2 = await prisma.supplier.upsert({
-    where: { ruc: "20123456782" },
+    where: { id: "supplier-002" },
     update: { name: "Repuestos Lima E.I.R.L.", contactName: "Carmen Vargas", phone: "946234567", email: "info@repuestoslima.pe", address: "Jr. Parinacochas 1234, La Victoria", isImporter: false, paymentTerms: "Contado" },
-    create: { name: "Repuestos Lima E.I.R.L.", contactName: "Carmen Vargas", phone: "946234567", email: "info@repuestoslima.pe", address: "Jr. Parinacochas 1234, La Victoria", ruc: "20123456782", isImporter: false, paymentTerms: "Contado" },
+    create: { id: "supplier-002", name: "Repuestos Lima E.I.R.L.", contactName: "Carmen Vargas", phone: "946234567", email: "info@repuestoslima.pe", address: "Jr. Parinacochas 1234, La Victoria", ruc: "20123456782", isImporter: false, paymentTerms: "Contado" },
   })
   const s3 = await prisma.supplier.upsert({
-    where: { ruc: "20123456783" },
+    where: { id: "supplier-003" },
     update: { name: "Global Auto Parts S.A.C.", contactName: "Kenji Tanaka", phone: "947345678", email: "pedidos@globalautoparts.com", address: "Av. Materiales 567, Cercado de Lima", isImporter: true, paymentTerms: "45 días", commissionRate: 3.5 },
-    create: { name: "Global Auto Parts S.A.C.", contactName: "Kenji Tanaka", phone: "947345678", email: "pedidos@globalautoparts.com", address: "Av. Materiales 567, Cercado de Lima", ruc: "20123456783", isImporter: true, paymentTerms: "45 días", commissionRate: 3.5 },
+    create: { id: "supplier-003", name: "Global Auto Parts S.A.C.", contactName: "Kenji Tanaka", phone: "947345678", email: "pedidos@globalautoparts.com", address: "Av. Materiales 567, Cercado de Lima", ruc: "20123456783", isImporter: true, paymentTerms: "45 días", commissionRate: 3.5 },
   })
   const s4 = await prisma.supplier.upsert({
-    where: { ruc: "20123456784" },
+    where: { id: "supplier-004" },
     update: { name: "Lubricantes Nacionales S.A.C.", contactName: "Walter Huamán", phone: "948456789", email: "contacto@lubrinac.pe", address: "Av. Venezuela 2345, Cercado de Lima", isImporter: false, paymentTerms: "15 días" },
-    create: { name: "Lubricantes Nacionales S.A.C.", contactName: "Walter Huamán", phone: "948456789", email: "contacto@lubrinac.pe", address: "Av. Venezuela 2345, Cercado de Lima", ruc: "20123456784", isImporter: false, paymentTerms: "15 días" },
+    create: { id: "supplier-004", name: "Lubricantes Nacionales S.A.C.", contactName: "Walter Huamán", phone: "948456789", email: "contacto@lubrinac.pe", address: "Av. Venezuela 2345, Cercado de Lima", ruc: "20123456784", isImporter: false, paymentTerms: "15 días" },
   })
   const s5 = await prisma.supplier.upsert({
-    where: { ruc: "20123456785" },
+    where: { id: "supplier-005" },
     update: { name: "Filtros y Componentes Perú S.A.", contactName: "Marisol Quispe", phone: "949567891", email: "ventas@filtrosyperu.pe", address: "Av. Colonial 890, Cercado de Lima", isImporter: false, paymentTerms: "Contado" },
-    create: { name: "Filtros y Componentes Perú S.A.", contactName: "Marisol Quispe", phone: "949567891", email: "ventas@filtrosyperu.pe", address: "Av. Colonial 890, Cercado de Lima", ruc: "20123456785", isImporter: false, paymentTerms: "Contado" },
+    create: { id: "supplier-005", name: "Filtros y Componentes Perú S.A.", contactName: "Marisol Quispe", phone: "949567891", email: "ventas@filtrosyperu.pe", address: "Av. Colonial 890, Cercado de Lima", ruc: "20123456785", isImporter: false, paymentTerms: "Contado" },
   })
   const s6 = await prisma.supplier.upsert({
-    where: { ruc: "20123456786" },
+    where: { id: "supplier-006" },
     update: { name: "Eléctricos Automotrices Lima S.A.C.", contactName: "Julio Sánchez", phone: "950678912", email: "pedidos@electricosautos.pe", address: "Jr. Amazonas 456, La Victoria", isImporter: false, paymentTerms: "30 días" },
-    create: { name: "Eléctricos Automotrices Lima S.A.C.", contactName: "Julio Sánchez", phone: "950678912", email: "pedidos@electricosautos.pe", address: "Jr. Amazonas 456, La Victoria", ruc: "20123456786", isImporter: false, paymentTerms: "30 días" },
+    create: { id: "supplier-006", name: "Eléctricos Automotrices Lima S.A.C.", contactName: "Julio Sánchez", phone: "950678912", email: "pedidos@electricosautos.pe", address: "Jr. Amazonas 456, La Victoria", ruc: "20123456786", isImporter: false, paymentTerms: "30 días" },
   })
   console.log("  OK 6 proveedores")
 
@@ -184,33 +184,33 @@ async function main() {
     create: { type: "INDIVIDUAL", firstName: "Patricia", lastName: "Vargas", dni: "89901456", phone: "993458901", address: "Jr. Bolognesi 567", district: "Barranco", source: "Google" },
   })
   const c9 = await prisma.client.upsert({
-    where: { ruc: "20456789012" },
+    where: { dni: "45678901" },
     update: { type: "COMPANY", firstName: "Jorge", lastName: "Yamamoto", companyName: "Empresa Transportes del Sur S.A.C.", ruc: "20456789012", phone: "953214567", phone2: "953214568", address: "Av. Industrial 1234", district: "Surquillo", source: "Referido" },
-    create: { type: "COMPANY", firstName: "Jorge", lastName: "Yamamoto", companyName: "Empresa Transportes del Sur S.A.C.", ruc: "20456789012", phone: "953214567", phone2: "953214568", address: "Av. Industrial 1234", district: "Surquillo", source: "Referido" },
+    create: { type: "COMPANY", firstName: "Jorge", lastName: "Yamamoto", dni: "45678901", companyName: "Empresa Transportes del Sur S.A.C.", ruc: "20456789012", phone: "953214567", phone2: "953214568", address: "Av. Industrial 1234", district: "Surquillo", source: "Referido" },
   })
   const c10 = await prisma.client.upsert({
-    where: { ruc: "20567890123" },
+    where: { dni: "56789012" },
     update: { type: "COMPANY", firstName: "Renato", lastName: "Ishikawa", companyName: "Inversiones Los Olivos S.A.", ruc: "20567890123", phone: "954325678", address: "Av. El Polo 567", district: "San Isidro", source: "Google" },
-    create: { type: "COMPANY", firstName: "Renato", lastName: "Ishikawa", companyName: "Inversiones Los Olivos S.A.", ruc: "20567890123", phone: "954325678", address: "Av. El Polo 567", district: "San Isidro", source: "Google" },
+    create: { type: "COMPANY", firstName: "Renato", lastName: "Ishikawa", dni: "56789012", companyName: "Inversiones Los Olivos S.A.", ruc: "20567890123", phone: "954325678", address: "Av. El Polo 567", district: "San Isidro", source: "Google" },
   })
   const c11 = await prisma.client.upsert({
-    where: { ruc: "20678901234" },
+    where: { dni: "67890123" },
     update: { type: "COMPANY", firstName: "Felipe", lastName: "Huarcaya", companyName: "Taxi Seguro Lima E.I.R.L.", ruc: "20678901234", phone: "955436789", address: "Av. Universitaria 890", district: "San Borja", source: "Walk-in" },
-    create: { type: "COMPANY", firstName: "Felipe", lastName: "Huarcaya", companyName: "Taxi Seguro Lima E.I.R.L.", ruc: "20678901234", phone: "955436789", address: "Av. Universitaria 890", district: "San Borja", source: "Walk-in" },
+    create: { type: "COMPANY", firstName: "Felipe", lastName: "Huarcaya", dni: "67890123", companyName: "Taxi Seguro Lima E.I.R.L.", ruc: "20678901234", phone: "955436789", address: "Av. Universitaria 890", district: "San Borja", source: "Walk-in" },
   })
   const c12 = await prisma.client.upsert({
-    where: { ruc: "20345678901" },
+    where: { dni: "78901234" },
     update: { type: "COMPANY", firstName: "Gloria", lastName: "Paredes", companyName: "Multiservicios Andinos S.A.C.", ruc: "20345678901", phone: "952103456", phone2: "952103457", address: "Av. República de Panamá 345", district: "Barranco", source: "Google" },
-    create: { type: "COMPANY", firstName: "Gloria", lastName: "Paredes", companyName: "Multiservicios Andinos S.A.C.", ruc: "20345678901", phone: "952103456", phone2: "952103457", address: "Av. República de Panamá 345", district: "Barranco", source: "Google" },
+    create: { type: "COMPANY", firstName: "Gloria", lastName: "Paredes", dni: "78901234", companyName: "Multiservicios Andinos S.A.C.", ruc: "20345678901", phone: "952103456", phone2: "952103457", address: "Av. República de Panamá 345", district: "Barranco", source: "Google" },
   })
   console.log("  OK 12 clientes")
   // ========== VEHICLES (24) ==========
   console.log("Creando vehículos...")
-  const v = (p: string, b: string, m: string, y: number, c: string, e: string, f: string, t: string, km: number, cl: string) => prisma.vehicle.upsert({
+  const v = (p: string, b: string, m: string, y: number, c: string, e: any, f: any, t: any, km: number, cl: string) => prisma.vehicle.upsert({
     where: { plate: p },
     update: { brand: b, model: m, year: y, color: c, engineType: e, fuelType: f, transmission: t, mileage: km, clientId: cl, photos: [] },
     create: { plate: p, brand: b, model: m, year: y, color: c, engineType: e, fuelType: f, transmission: t, mileage: km, clientId: cl, photos: [] },
-  })
+  } as any)
   const v1 = await v("ABC-123","Toyota","Hilux",2020,"Blanco","DIESEL","DIESEL","AUTOMATIC",85000,c1.id)
   const v2 = await v("DEF-456","Nissan","Sentra",2018,"Gris","GASOLINE","GASOLINE","MANUAL",120000,c1.id)
   const v3 = await v("GHI-789","Hyundai","Tucson",2021,"Plata","GASOLINE","GASOLINE","AUTOMATIC",65000,c2.id)
@@ -278,11 +278,11 @@ async function main() {
   console.log("  OK 32 ítems")
   // ========== WORK ORDERS (22) ==========
   console.log("Creando órdenes de trabajo...")
-  const wo = (num: string, vid: string, cid: string, mid: string|null, st: string, p: string, tp: string, desc: string, diag: string|null, kmIn: number|null, kmOut: number|null, lab: number|null, parts: number|null, total: number|null, disc: number, finAmt: number|null, recv: Date, start: Date|null, comp: Date|null, delv: Date|null, estDel: Date|null, paySt: string, warr: number, creat: string, upd: string|null) => prisma.workOrder.upsert({
+  const wo = (num: string, vid: string, cid: string, mid: string|null, st: any, p: any, tp: any, desc: string, diag: string|null, kmIn: number|null, kmOut: number|null, lab: number|null, parts: any, total: any, disc: number, finAmt: number|null, recv: Date, start: Date|null, comp: Date|null, delv: Date|null, estDel: Date|null, paySt: any, warr: number, creat: string, upd: string|null) => prisma.workOrder.upsert({
     where: { number: num },
-    update: { vehicleId: vid, clientId: cid, mechanicId: mid, status: st, priority: p, type: tp, description: desc, diagnosis: diag, odometerIn: kmIn, odometerOut: kmOut, laborCost: lab, partsCost: parts, totalCost: total, discount: disc, tax: 0, finalAmount: finAmt ?? total ?? 0, receivedAt: recv, startedAt: start, completedAt: comp, deliveredAt: delv, estimatedDelivery: estDel, paymentStatus: paySt, warrantyDays: warr, updatedBy: upd },
-    create: { number: num, vehicleId: vid, clientId: cid, mechanicId: mid, status: st, priority: p, type: tp, description: desc, diagnosis: diag, odometerIn: kmIn, odometerOut: kmOut, laborCost: lab, partsCost: parts, totalCost: total, discount: disc, tax: 0, finalAmount: finAmt ?? total ?? 0, receivedAt: recv, startedAt: start, completedAt: comp, deliveredAt: delv, estimatedDelivery: estDel, paymentStatus: paySt, warrantyDays: warr, createdBy: creat, photos: [] },
-  })
+    update: { vehicleId: vid, clientId: cid, mechanicId: mid, status: st as any, priority: p as any, type: tp as any, description: desc, diagnosis: diag, odometerIn: kmIn, odometerOut: kmOut, laborCost: lab, partsCost: parts, totalCost: total, discount: disc, tax: 0, finalAmount: finAmt ?? total ?? 0, receivedAt: recv, startedAt: start, completedAt: comp, deliveredAt: delv, estimatedDelivery: estDel, paymentStatus: paySt as any, warrantyDays: warr, updatedBy: upd },
+    create: { number: num, vehicleId: vid, clientId: cid, mechanicId: mid, status: st as any, priority: p as any, type: tp as any, description: desc, diagnosis: diag, odometerIn: kmIn, odometerOut: kmOut, laborCost: lab, partsCost: parts, totalCost: total, discount: disc, tax: 0, finalAmount: finAmt ?? total ?? 0, receivedAt: recv, startedAt: start, completedAt: comp, deliveredAt: delv, estimatedDelivery: estDel, paymentStatus: paySt as any, warrantyDays: warr, createdBy: creat, photos: [] },
+  } as any)
 
   const o1 = await wo("OT-2026-0001",v1.id,c1.id,null,"DELIVERED","NORMAL","PREVENTIVE","Cambio de aceite y filtros","Mantenimiento regular programado 5,000 km",85000,85010,80,215,295,0,null,dt("2026-05-02"),dt("2026-05-02","09:00"),dt("2026-05-02","11:30"),dt("2026-05-02","12:00"),null,"PAID",30,ed.id,an.id)
   const o2 = await wo("OT-2026-0002",v2.id,c1.id,ca.id,"IN_PROGRESS","HIGH","CORRECTIVE","Reparación de frenos delanteros","Pastillas de freno delanteras desgastadas al límite, discos con rayado leve",120000,null,150,450,600,0,null,dt("2026-06-02","10:15"),dt("2026-06-02","11:00"),null,null,dt("2026-06-05","18:00"),"DRAFT",60,ju.id,ju.id)
@@ -391,7 +391,7 @@ async function main() {
     const dow = date.getDay()
     if (dow === 0 || dow === 6) continue
     for (const pers of personnel) {
-      let type = "PRESENT" as string, checkIn: Date | null = daysAgo(day, 8, 0), checkOut: Date | null = daysAgo(day, 18, 0), notes: string | null = null
+      let type: any = "PRESENT", checkIn: Date | null = daysAgo(day, 8, 0), checkOut: Date | null = daysAgo(day, 18, 0), notes: string | null = null
       if (absentPeople.includes(pers.id) && day % 13 === 0) { type = "ABSENT"; checkIn = null; checkOut = null; notes = "Falta injustificada" }
       else if (latePeople.includes(pers.id) && day % 7 === 0) { type = "LATE"; checkIn = daysAgo(day, 8, 35); notes = "Llegada tarde 35 minutos" }
       await prisma.attendance.upsert({
@@ -406,11 +406,11 @@ async function main() {
 
   // ========== EXPENSES (16) ==========
   console.log("Creando gastos...")
-  const exp = (amt: number, cat: string, desc: string, st: string, lvl: string, req: string, app: string | null, createdAt: Date) => prisma.expenseAuthorization.upsert({
+  const exp = (amt: number, cat: any, desc: string, st: any, lvl: any, req: string, app: string | null, createdAt: Date) => prisma.expenseAuthorization.upsert({
     where: { id: "exp-" + createdAt.getTime() + "-" + desc.substring(0, 5).replace(/\s/g, "") + amt },
     update: {},
-    create: { id: "exp-" + createdAt.getTime() + "-" + desc.substring(0, 5).replace(/\s/g, "") + amt, amount: amt, currency: "PEN", category: cat, description: desc, status: st, approvalLevel: lvl, requesterId: req, approverId: app, createdAt },
-  })
+    create: { id: "exp-" + createdAt.getTime() + "-" + desc.substring(0, 5).replace(/\s/g, "") + amt, amount: amt, currency: "PEN", category: cat as any, description: desc, status: st as any, approvalLevel: lvl as any, requesterId: req, approverId: app, createdAt },
+  } as any)
   await exp(1250,"PARTS","Compra de repuestos para stock general","APPROVED","OWNER",ju.id,ed.id,dt("2026-05-05","10:00"))
   await exp(350,"SUPPLIES","Insumos de limpieza y desengrasantes","APPROVED","ADMIN",an.id,an.id,dt("2026-05-08","14:00"))
   await exp(850,"TOOLS","Juego de llaves de torque y herramientas especializadas","APPROVED","OWNER",ca.id,ju.id,dt("2026-05-12","09:00"))

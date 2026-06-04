@@ -115,7 +115,7 @@ export class CommissionsService {
       throw new NotFoundException("Aprobador no encontrado")
     }
 
-    if (![UserRole.OWNER, UserRole.ADMIN].includes(approver.role)) {
+    if (!([UserRole.OWNER, UserRole.ADMIN] as UserRole[]).includes(approver.role)) {
       throw new ForbiddenException("Solo OWNER o ADMIN pueden aprobar comisiones")
     }
 

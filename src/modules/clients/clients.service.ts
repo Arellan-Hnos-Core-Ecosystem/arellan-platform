@@ -54,7 +54,9 @@ export class ClientsService {
       }
     }
 
-    const client = await this.prisma.client.create({ data: dto })
+    const client = await this.prisma.client.create({
+      data: { ...dto, phone: dto.phone ?? "-" },
+    })
 
     this.logger.log(`Cliente creado: ${client.firstName} ${client.lastName} (${client.id})`)
     return client

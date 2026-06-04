@@ -1,7 +1,7 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards } from "@nestjs/common"
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Req } from "@nestjs/common"
 import { OrdersService } from "./orders.service"
 import { AuthUser } from "../auth/auth.service"
-import { CreateOrderDto, UpdateOrderDto, UpdateStatusDto, OrderFilterDto } from "./dto/orders.dto"
+import { CreateOrderDto, UpdateOrderDto, UpdateStatusDto, OrderFilterDto, ApplyDiscountDto } from "./dto/orders.dto"
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard"
 import { RolesGuard } from "../../common/guards/roles.guard"
 import { Roles } from "../../common/decorators/roles.decorator"
@@ -46,8 +46,8 @@ export class OrdersController {
   @Post()
   @Roles(UserRole.OWNER, UserRole.ADMIN)
   @UseGuards(RolesGuard)
-  create(@Body() dto: CreateOrderDto) {
-    return this.ordersService.create(dto)
+  create(@Body() dto: CreateOrderDto, @CurrentUser() user: AuthUser) {
+    return this.ordersService.create(dto, user.id)
   }
 
   @Patch(":id")
@@ -69,9 +69,20 @@ export class OrdersController {
   }
 
   @Delete(":id")
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.OWNER)
-  @UseGuards(RolesGuard)
   remove(@Param("id") id: string) {
     return this.ordersService.softDelete(id)
+  }
+
+  @Post(":id/discount")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.MECHANIC)
+  applyDiscount(
+    @Param("id") orderId: string,
+    @Body() dto: ApplyDiscountDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.ordersService.applyDiscount(orderId, dto, user.id, user.role)
   }
 }
