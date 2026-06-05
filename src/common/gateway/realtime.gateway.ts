@@ -6,6 +6,7 @@ import {
 import { Server, Socket } from "socket.io"
 import { Logger, Injectable } from "@nestjs/common"
 import { JwtService } from "@nestjs/jwt"
+import { PrismaService } from "../prisma/prisma.service"
 
 interface OrderUpdatePayload {
   orderId: string
@@ -50,7 +51,10 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
   @WebSocketServer() server: Server
   private logger = new Logger("RealtimeGateway")
 
-  constructor(private jwtService: JwtService) {}
+  constructor(
+    private jwtService: JwtService,
+    private prisma: PrismaService,
+  ) {}
 
   afterInit() {
     this.logger.log("Realtime WebSocket Gateway initialized")
@@ -288,7 +292,7 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
   }
 
   @SubscribeMessage("mechanic:progress")
-  handleMechanicProgress(
+  async handleMechanicProgress(
     @ConnectedSocket() _client: Socket,
     @MessageBody() data: MechanicProgressPayload,
   ) {
@@ -296,6 +300,29 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
       ...data,
       timestamp: data.timestamp || new Date().toISOString(),
     })
+
+    try {
+      await this.prisma.workOrderEvent.create({
+        data: {
+          workOrderId: data.orderId,
+          event: "PROGRESS_REPORTED",
+          description: data.notes
+            ? `${data.mechanicName} registró avance técnico: ${data.notes} (${data.progressPercent}%)`
+            : `${data.mechanicName} reportó avance del ${data.progressPercent}% - ${data.partsInstalled} repuestos instalados, ${data.laborHours}h trabajadas`,
+          metadata: {
+            progressPercent: data.progressPercent,
+            partsInstalled: data.partsInstalled,
+            laborHours: data.laborHours,
+            notes: data.notes ?? null,
+          },
+          userId: data.mechanicId,
+        },
+      })
+      this.logger.log(`Progreso WS persistido en DB: OT ${data.orderNumber || data.orderId} - ${data.mechanicName}`)
+    } catch (e) {
+      this.logger.error(`Error al persistir progreso WS: ${(e as Error).message}`)
+    }
+
     return { success: true, eventId: `progress-${Date.now()}` }
   }
 

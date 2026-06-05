@@ -35,3 +35,16 @@ export interface PaginatedResult<T> {
     data: T[];
     nextCursor: string | null;
 }
+export declare class RequestPartsItemDto {
+    itemId: string;
+    quantity: number;
+}
+export declare class RequestPartsDto {
+    items: RequestPartsItemDto[];
+}
+export declare class MechanicProgressDto {
+    progressPercent: number;
+    partsInstalled: number;
+    laborHours: number;
+    notes?: string;
+}

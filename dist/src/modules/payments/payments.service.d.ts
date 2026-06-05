@@ -26,8 +26,8 @@ export declare class PaymentsService {
             notes: string | null;
             verifiedBy: string | null;
             amount: Prisma.Decimal;
-            invoiceId: string | null;
             workOrderId: string | null;
+            invoiceId: string | null;
             method: import(".prisma/client").$Enums.PaymentMethod;
             reference: string | null;
             receivedBy: string;
@@ -57,8 +57,8 @@ export declare class PaymentsService {
         notes: string | null;
         verifiedBy: string | null;
         amount: Prisma.Decimal;
-        invoiceId: string | null;
         workOrderId: string | null;
+        invoiceId: string | null;
         method: import(".prisma/client").$Enums.PaymentMethod;
         reference: string | null;
         receivedBy: string;
@@ -74,8 +74,8 @@ export declare class PaymentsService {
         notes: string | null;
         verifiedBy: string | null;
         amount: Prisma.Decimal;
-        invoiceId: string | null;
         workOrderId: string | null;
+        invoiceId: string | null;
         method: import(".prisma/client").$Enums.PaymentMethod;
         reference: string | null;
         receivedBy: string;
@@ -96,8 +96,8 @@ export declare class PaymentsService {
         notes: string | null;
         verifiedBy: string | null;
         amount: Prisma.Decimal;
-        invoiceId: string | null;
         workOrderId: string | null;
+        invoiceId: string | null;
         method: import(".prisma/client").$Enums.PaymentMethod;
         reference: string | null;
         receivedBy: string;
@@ -127,8 +127,8 @@ export declare class PaymentsService {
         notes: string | null;
         verifiedBy: string | null;
         amount: Prisma.Decimal;
-        invoiceId: string | null;
         workOrderId: string | null;
+        invoiceId: string | null;
         method: import(".prisma/client").$Enums.PaymentMethod;
         reference: string | null;
         receivedBy: string;

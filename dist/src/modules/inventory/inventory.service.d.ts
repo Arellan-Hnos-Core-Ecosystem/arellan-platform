@@ -60,9 +60,9 @@ export declare class InventoryService {
         id: string;
         createdAt: Date;
         type: import(".prisma/client").$Enums.MovementType;
-        orderId: string | null;
         itemId: string;
         quantity: number;
+        orderId: string | null;
         authorizedBy: string;
         justification: string | null;
         unitCost: Prisma.Decimal | null;
@@ -72,9 +72,9 @@ export declare class InventoryService {
             id: string;
             createdAt: Date;
             type: import(".prisma/client").$Enums.MovementType;
-            orderId: string | null;
             itemId: string;
             quantity: number;
+            orderId: string | null;
             authorizedBy: string;
             justification: string | null;
             unitCost: Prisma.Decimal | null;
@@ -93,9 +93,9 @@ export declare class InventoryService {
             id: string;
             createdAt: Date;
             type: import(".prisma/client").$Enums.MovementType;
-            orderId: string | null;
             itemId: string;
             quantity: number;
+            orderId: string | null;
             authorizedBy: string;
             justification: string | null;
             unitCost: Prisma.Decimal | null;

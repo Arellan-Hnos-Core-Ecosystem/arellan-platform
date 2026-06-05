@@ -1,6 +1,7 @@
 import { OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect } from "@nestjs/websockets";
 import { Server, Socket } from "socket.io";
 import { JwtService } from "@nestjs/jwt";
+import { PrismaService } from "../prisma/prisma.service";
 interface OrderUpdatePayload {
     orderId: string;
     orderNumber: string;
@@ -25,9 +26,10 @@ interface MechanicProgressPayload {
 }
 export declare class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
     private jwtService;
+    private prisma;
     server: Server;
     private logger;
-    constructor(jwtService: JwtService);
+    constructor(jwtService: JwtService, prisma: PrismaService);
     afterInit(): void;
     handleConnection(client: Socket): Promise<void>;
     handleDisconnect(client: Socket): void;
@@ -118,10 +120,10 @@ export declare class RealtimeGateway implements OnGatewayInit, OnGatewayConnecti
         success: boolean;
         error?: undefined;
     };
-    handleMechanicProgress(_client: Socket, data: MechanicProgressPayload): {
+    handleMechanicProgress(_client: Socket, data: MechanicProgressPayload): Promise<{
         success: boolean;
         eventId: string;
-    };
+    }>;
     handleClientSubscribe(client: Socket, data: unknown): {
         success: boolean;
         error: string;

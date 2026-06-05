@@ -100,6 +100,7 @@ let OrdersService = OrdersService_1 = class OrdersService {
                 ...ORDER_INCLUDE,
                 parts: { include: { item: true } },
                 statusHistory: { orderBy: { timestamp: "desc" } },
+                events: { orderBy: { createdAt: "desc" } },
                 payments: { select: { id: true, method: true, amount: true, paidAt: true } },
             },
         });
@@ -254,6 +255,7 @@ let OrdersService = OrdersService_1 = class OrdersService {
                 parts: { include: { item: { select: { id: true, name: true, sku: true } } } },
                 photosRel: { select: { id: true, url: true, type: true } },
                 statusHistory: { orderBy: { timestamp: "desc" } },
+                events: { orderBy: { createdAt: "desc" } },
             },
         });
         const hasMore = orders.length > limit;
@@ -262,9 +264,11 @@ let OrdersService = OrdersService_1 = class OrdersService {
         const flattened = data.map((o) => ({
             ...o,
             vehiclePlate: o.vehicle?.plate ?? null,
+            vehicleBrand: o.vehicle?.brand ?? null,
             vehicleModel: o.vehicle?.model ?? null,
             photos: o.photosRel ?? [],
-            timeline: o.statusHistory ?? [],
+            timeline: [...(o.statusHistory ?? []), ...(o.events ?? [])].sort((a, b) => new Date(b.timestamp ?? b.createdAt ?? 0).getTime() -
+                new Date(a.timestamp ?? a.createdAt ?? 0).getTime()),
         }));
         return { data: flattened, nextCursor };
     }
@@ -402,6 +406,199 @@ let OrdersService = OrdersService_1 = class OrdersService {
         });
         this.logger.log(`Foto subida a OT ${order.number}`);
         return { success: true, url };
+    }
+    async requestParts(orderId, dto, userId, userName) {
+        const order = await this.prisma.workOrder.findUnique({ where: { id: orderId } });
+        if (!order)
+            throw new common_1.NotFoundException("Orden de trabajo no encontrada");
+        if (["DELIVERED", "CANCELLED"].includes(order.status)) {
+            throw new common_1.ConflictException("No se pueden solicitar repuestos para una orden finalizada");
+        }
+        const results = await this.prisma.$transaction(async (tx) => {
+            const created = [];
+            for (const req of dto.items) {
+                const item = await tx.inventoryItem.findUnique({ where: { id: req.itemId } });
+                if (!item)
+                    throw new common_1.NotFoundException(`Item de inventario no encontrado: ${req.itemId}`);
+                if (item.stock < req.quantity) {
+                    throw new common_1.ConflictException(`Stock insuficiente para ${item.name}. Disponible: ${item.stock}, solicitado: ${req.quantity}`);
+                }
+                const part = await tx.workOrderPart.create({
+                    data: { orderId, itemId: req.itemId, quantity: req.quantity, unitPrice: item.unitPrice },
+                });
+                await tx.inventoryMovement.create({
+                    data: {
+                        itemId: req.itemId,
+                        type: "OUT",
+                        quantity: req.quantity,
+                        orderId,
+                        authorizedBy: userId,
+                        unitCost: item.costPrice,
+                        justification: `Consumo en OT ${order.number}`,
+                    },
+                });
+                await tx.inventoryItem.update({
+                    where: { id: req.itemId },
+                    data: { stock: item.stock - req.quantity },
+                });
+                await tx.workOrderEvent.create({
+                    data: {
+                        workOrderId: orderId,
+                        event: "PART_REQUESTED",
+                        description: `${userName} solicitó repuesto: ${item.name} x${req.quantity} para OT ${order.number}`,
+                        userId,
+                    },
+                });
+                created.push(part);
+            }
+            return created;
+        });
+        this.logger.log(`${dto.items.length} repuesto(s) solicitado(s) para OT ${order.number}`);
+        return { success: true, parts: results };
+    }
+    async reportProgress(orderId, dto, userId, userName) {
+        const order = await this.prisma.workOrder.findUnique({ where: { id: orderId } });
+        if (!order)
+            throw new common_1.NotFoundException("Orden de trabajo no encontrada");
+        const desc = dto.notes
+            ? `${userName} registró avance técnico: ${dto.notes} (${dto.progressPercent}%)`
+            : `${userName} reportó avance del ${dto.progressPercent}% - ${dto.partsInstalled} repuestos instalados, ${dto.laborHours}h trabajadas`;
+        const event = await this.prisma.workOrderEvent.create({
+            data: {
+                workOrderId: orderId,
+                event: "PROGRESS_REPORTED",
+                description: desc,
+                metadata: {
+                    progressPercent: dto.progressPercent,
+                    partsInstalled: dto.partsInstalled,
+                    laborHours: dto.laborHours,
+                    notes: dto.notes ?? null,
+                },
+                userId,
+            },
+        });
+        if (dto.laborHours > 0) {
+            await this.prisma.workOrder.update({
+                where: { id: orderId },
+                data: {
+                    laborCost: new client_1.Prisma.Decimal(Number(order.laborCost ?? 0) + dto.laborHours * 50),
+                },
+            });
+        }
+        this.logger.log(`Avance registrado en OT ${order.number}: ${dto.progressPercent}%`);
+        return { success: true, event };
+    }
+    async deletePhoto(orderId, photoId, userId, userName) {
+        const order = await this.prisma.workOrder.findUnique({ where: { id: orderId } });
+        if (!order)
+            throw new common_1.NotFoundException("Orden de trabajo no encontrada");
+        const photo = await this.prisma.workOrderPhoto.findFirst({
+            where: { id: photoId, orderId },
+        });
+        if (!photo)
+            throw new common_1.NotFoundException("Foto no encontrada en esta orden");
+        await this.prisma.workOrderPhoto.delete({ where: { id: photoId } });
+        const updatedPhotos = (order.photos ?? []).filter((url) => url !== photo.url);
+        await this.prisma.workOrder.update({
+            where: { id: orderId },
+            data: { photos: updatedPhotos },
+        });
+        await this.prisma.workOrderEvent.create({
+            data: {
+                workOrderId: orderId,
+                event: "PHOTO_DELETED",
+                description: `${userName} eliminó una foto del vehículo.`,
+                userId,
+            },
+        });
+        this.logger.log(`Foto ${photoId} eliminada de OT ${order.number}`);
+        return { success: true };
+    }
+    async vehicleCheckin(body, photos, userId, userName) {
+        const plateNormalized = body.plate.toUpperCase().trim();
+        let vehicle = await this.prisma.vehicle.findFirst({
+            where: { plate: { equals: plateNormalized, mode: "insensitive" } },
+        });
+        if (vehicle) {
+            const activeOrder = await this.prisma.workOrder.findFirst({
+                where: {
+                    vehicleId: vehicle.id,
+                    status: { notIn: ["DELIVERED", "CANCELLED"] },
+                },
+            });
+            if (activeOrder) {
+                throw new common_1.ConflictException(`Ya existe una OT activa (${activeOrder.number}) para la placa ${plateNormalized}`);
+            }
+        }
+        if (!vehicle) {
+            let defaultClient = await this.prisma.client.findFirst({
+                where: { email: "sinasignar@arellanhnos.com" },
+            });
+            if (!defaultClient) {
+                defaultClient = await this.prisma.client.create({
+                    data: {
+                        firstName: "Cliente",
+                        lastName: "Sin Asignar",
+                        email: "sinasignar@arellanhnos.com",
+                        dni: "00000000",
+                        phone: "000000000",
+                    },
+                });
+            }
+            vehicle = await this.prisma.vehicle.create({
+                data: {
+                    plate: plateNormalized,
+                    brand: body.brand || "No especificado",
+                    model: body.model || "No especificado",
+                    year: new Date().getFullYear(),
+                    color: "No especificado",
+                    clientId: defaultClient.id,
+                },
+            });
+        }
+        const year = new Date().getFullYear();
+        const count = await this.prisma.workOrder.count({
+            where: { number: { startsWith: `OT-${year}-` } },
+        });
+        const number = `OT-${year}-${String(count + 1).padStart(4, "0")}`;
+        const order = await this.prisma.workOrder.create({
+            data: {
+                number,
+                vehicleId: vehicle.id,
+                clientId: vehicle.clientId,
+                mechanicId: userId,
+                description: body.description || `Ingreso de vehículo ${plateNormalized}`,
+                createdBy: userId,
+            },
+            include: ORDER_INCLUDE,
+        });
+        for (const photo of photos) {
+            const url = `data:${photo.mimetype};base64,${photo.buffer.toString("base64")}`;
+            const hash = require("crypto").createHash("md5").update(photo.buffer).digest("hex");
+            await this.prisma.workOrderPhoto.create({
+                data: { orderId: order.id, url, type: photo.mimetype, hash },
+            });
+            await this.prisma.workOrder.update({
+                where: { id: order.id },
+                data: { photos: { push: url } },
+            });
+        }
+        await this.prisma.workOrderEvent.create({
+            data: {
+                workOrderId: order.id,
+                event: "VEHICLE_INTAKE",
+                description: `${userName} ingresó el vehículo ${plateNormalized} al taller`,
+                userId,
+            },
+        });
+        this.wsGateway.emitOrderCreated({
+            orderId: order.id,
+            orderNumber: order.number,
+            clientName: vehicle.brand + " " + vehicle.model,
+            vehiclePlate: vehicle.plate,
+        });
+        this.logger.log(`Checkin: Vehículo ${plateNormalized} → OT ${order.number}`);
+        return { success: true, orderId: order.id, orderNumber: order.number };
     }
 };
 exports.OrdersService = OrdersService;

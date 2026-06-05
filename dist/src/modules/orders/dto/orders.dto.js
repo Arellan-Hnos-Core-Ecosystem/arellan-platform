@@ -9,8 +9,9 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.OrderFilterDto = exports.ApplyDiscountDto = exports.AssignMechanicDto = exports.UpdateStatusDto = exports.UpdateOrderDto = exports.CreateOrderDto = void 0;
+exports.MechanicProgressDto = exports.RequestPartsDto = exports.RequestPartsItemDto = exports.OrderFilterDto = exports.ApplyDiscountDto = exports.AssignMechanicDto = exports.UpdateStatusDto = exports.UpdateOrderDto = exports.CreateOrderDto = void 0;
 const class_validator_1 = require("class-validator");
+const class_transformer_1 = require("class-transformer");
 const client_1 = require("@prisma/client");
 const swagger_1 = require("@nestjs/swagger");
 class CreateOrderDto {
@@ -168,4 +169,64 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], OrderFilterDto.prototype, "cursor", void 0);
+class RequestPartsItemDto {
+    itemId;
+    quantity;
+}
+exports.RequestPartsItemDto = RequestPartsItemDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({ description: "ID del item de inventario (UUID v4)", example: "550e8400-e29b-41d4-a716-446655440000" }),
+    (0, class_validator_1.IsUUID)("4", { message: "ID de item invalido" }),
+    __metadata("design:type", String)
+], RequestPartsItemDto.prototype, "itemId", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ description: "Cantidad a solicitar (1-99)", example: 2, minimum: 1, maximum: 99 }),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(1, { message: "Minimo 1 unidad" }),
+    (0, class_validator_1.Max)(99, { message: "Maximo 99 unidades" }),
+    __metadata("design:type", Number)
+], RequestPartsItemDto.prototype, "quantity", void 0);
+class RequestPartsDto {
+    items;
+}
+exports.RequestPartsDto = RequestPartsDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({ description: "Items de inventario a solicitar para la OT", type: [RequestPartsItemDto] }),
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.ValidateNested)({ each: true }),
+    (0, class_transformer_1.Type)(() => RequestPartsItemDto),
+    __metadata("design:type", Array)
+], RequestPartsDto.prototype, "items", void 0);
+class MechanicProgressDto {
+    progressPercent;
+    partsInstalled;
+    laborHours;
+    notes;
+}
+exports.MechanicProgressDto = MechanicProgressDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({ description: "Porcentaje de avance (0-100)", example: 75 }),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(0),
+    (0, class_validator_1.Max)(100),
+    __metadata("design:type", Number)
+], MechanicProgressDto.prototype, "progressPercent", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ description: "Cantidad de repuestos instalados", example: 3 }),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Number)
+], MechanicProgressDto.prototype, "partsInstalled", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ description: "Horas de trabajo invertidas", example: 2.5 }),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Number)
+], MechanicProgressDto.prototype, "laborHours", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ description: "Notas descriptivas del avance", example: "Reparacion de frenos al 80%, falta purgado" }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], MechanicProgressDto.prototype, "notes", void 0);
 //# sourceMappingURL=orders.dto.js.map

@@ -61,6 +61,18 @@ let OrdersController = class OrdersController {
     async uploadPhoto(id, photo, description) {
         return this.ordersService.uploadPhoto(id, photo, description);
     }
+    async requestParts(id, dto, user) {
+        return this.ordersService.requestParts(id, dto, user.id, user.name);
+    }
+    async reportProgress(id, dto, user) {
+        return this.ordersService.reportProgress(id, dto, user.id, user.name);
+    }
+    async deletePhoto(id, photoId, user) {
+        return this.ordersService.deletePhoto(id, photoId, user.id, user.name);
+    }
+    async vehicleCheckin(body, photos, user) {
+        return this.ordersService.vehicleCheckin(body, photos ?? [], user?.id ?? "system", user?.name ?? "Sistema");
+    }
 };
 exports.OrdersController = OrdersController;
 __decorate([
@@ -244,6 +256,92 @@ __decorate([
     __metadata("design:paramtypes", [String, Object, String]),
     __metadata("design:returntype", Promise)
 ], OrdersController.prototype, "uploadPhoto", null);
+__decorate([
+    (0, common_1.Post)(":id/parts"),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.MECHANIC, client_1.UserRole.TRAINEE, client_1.UserRole.ADMIN, client_1.UserRole.OWNER),
+    (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, swagger_1.ApiOperation)({
+        summary: "Solicitar repuestos para una orden",
+        description: "Agrega repuestos del inventario a la OT con descuento automatico de stock. Procesa una lista de items y registra eventos PART_REQUESTED en la bitacora.",
+    }),
+    (0, swagger_1.ApiParam)({ name: "id", description: "ID de la OT (UUID v4)" }),
+    (0, swagger_1.ApiResponse)({ status: 201, description: "Repuestos solicitados y stock actualizado" }),
+    (0, swagger_1.ApiResponse)({ status: 400, description: "Datos invalidos" }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: "OT o item no encontrado" }),
+    (0, swagger_1.ApiResponse)({ status: 409, description: "Stock insuficiente u OT finalizada" }),
+    __param(0, (0, common_1.Param)("id")),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, orders_dto_1.RequestPartsDto, Object]),
+    __metadata("design:returntype", Promise)
+], OrdersController.prototype, "requestParts", null);
+__decorate([
+    (0, common_1.Post)(":id/progress"),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.MECHANIC, client_1.UserRole.TRAINEE),
+    (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, swagger_1.ApiOperation)({
+        summary: "Reportar avance tecnico de una orden",
+        description: "Registra el porcentaje de avance, repuestos instalados y horas de trabajo. Crea un evento en la bitacora de la OT para trazabilidad completa.",
+    }),
+    (0, swagger_1.ApiParam)({ name: "id", description: "ID de la OT (UUID v4)" }),
+    (0, swagger_1.ApiResponse)({ status: 201, description: "Avance registrado en la bitacora" }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: "OT no encontrada" }),
+    __param(0, (0, common_1.Param)("id")),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, orders_dto_1.MechanicProgressDto, Object]),
+    __metadata("design:returntype", Promise)
+], OrdersController.prototype, "reportProgress", null);
+__decorate([
+    (0, common_1.Delete)(":id/photos/:photoId"),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.MECHANIC, client_1.UserRole.TRAINEE, client_1.UserRole.ADMIN, client_1.UserRole.OWNER),
+    (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, swagger_1.ApiOperation)({
+        summary: "Eliminar foto de una orden de trabajo",
+        description: "Elimina una foto asociada a la OT y registra un evento PHOTO_DELETED en la bitacora.",
+    }),
+    (0, swagger_1.ApiParam)({ name: "id", description: "ID de la OT (UUID v4)" }),
+    (0, swagger_1.ApiParam)({ name: "photoId", description: "ID de la foto a eliminar (UUID v4)" }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: "Foto eliminada y evento registrado" }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: "OT o foto no encontrada" }),
+    __param(0, (0, common_1.Param)("id")),
+    __param(1, (0, common_1.Param)("photoId")),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, Object]),
+    __metadata("design:returntype", Promise)
+], OrdersController.prototype, "deletePhoto", null);
+__decorate([
+    (0, common_1.Post)("checkin"),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.MECHANIC, client_1.UserRole.TRAINEE, client_1.UserRole.ADMIN, client_1.UserRole.OWNER),
+    (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, common_1.UseInterceptors)((0, platform_express_1.FilesInterceptor)("photos", 10)),
+    (0, swagger_1.ApiOperation)({
+        summary: "Ingreso rapido de vehiculo al taller",
+        description: "Crea o encuentra un vehiculo por placa y genera una OT nueva. Recibe fotos multipart del vehiculo. Usado desde la tablet por el mecanico al recibir un auto.",
+    }),
+    (0, swagger_1.ApiConsumes)("multipart/form-data"),
+    (0, swagger_1.ApiBody)({ schema: { type: "object", properties: {
+                plate: { type: "string", example: "ABC-123" },
+                brand: { type: "string", example: "Toyota" },
+                model: { type: "string", example: "Hiace" },
+                kilometerReading: { type: "string", example: "85000" },
+                fuelLevel: { type: "string", example: "HALF" },
+                description: { type: "string", example: "Cambio de aceite y filtros" },
+                photoPositions: { type: "string", example: "FRONT,BACK,LEFT,RIGHT" },
+                photos: { type: "array", items: { type: "string", format: "binary" } },
+            } } }),
+    (0, swagger_1.ApiResponse)({ status: 201, description: "Vehiculo ingresado y OT creada" }),
+    (0, swagger_1.ApiResponse)({ status: 409, description: "Ya existe una OT activa para esa placa" }),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.UploadedFiles)()),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Array, Object]),
+    __metadata("design:returntype", Promise)
+], OrdersController.prototype, "vehicleCheckin", null);
 exports.OrdersController = OrdersController = __decorate([
     (0, swagger_1.ApiTags)("Orders"),
     (0, common_1.Controller)("orders"),

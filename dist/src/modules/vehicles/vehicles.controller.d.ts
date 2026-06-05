@@ -23,8 +23,8 @@ export declare class VehiclesController {
             authorizedBy: string | null;
             purpose: string;
             destination: string | null;
-            expectedReturn: Date;
             checkoutAt: Date;
+            expectedReturn: Date;
             returnAt: Date | null;
         })[];
     } & {

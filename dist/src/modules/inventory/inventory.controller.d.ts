@@ -15,9 +15,9 @@ export declare class InventoryController {
             id: string;
             createdAt: Date;
             type: import(".prisma/client").$Enums.MovementType;
-            orderId: string | null;
             itemId: string;
             quantity: number;
+            orderId: string | null;
             authorizedBy: string;
             justification: string | null;
             unitCost: import("@prisma/client/runtime/library").Decimal | null;
@@ -80,9 +80,9 @@ export declare class InventoryController {
         id: string;
         createdAt: Date;
         type: import(".prisma/client").$Enums.MovementType;
-        orderId: string | null;
         itemId: string;
         quantity: number;
+        orderId: string | null;
         authorizedBy: string;
         justification: string | null;
         unitCost: import("@prisma/client/runtime/library").Decimal | null;
@@ -92,9 +92,9 @@ export declare class InventoryController {
             id: string;
             createdAt: Date;
             type: import(".prisma/client").$Enums.MovementType;
-            orderId: string | null;
             itemId: string;
             quantity: number;
+            orderId: string | null;
             authorizedBy: string;
             justification: string | null;
             unitCost: import("@prisma/client/runtime/library").Decimal | null;

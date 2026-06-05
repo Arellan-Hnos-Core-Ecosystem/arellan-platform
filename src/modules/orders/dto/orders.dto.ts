@@ -1,4 +1,5 @@
-import { IsString, IsOptional, IsEnum, IsNumber, IsDateString, IsUUID, Min, Max } from "class-validator"
+import { IsString, IsOptional, IsEnum, IsNumber, IsDateString, IsUUID, Min, Max, IsArray, ValidateNested } from "class-validator"
+import { Type } from "class-transformer"
 import { OrderStatus } from "@prisma/client"
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger"
 
@@ -114,4 +115,47 @@ export class OrderFilterDto {
 export interface PaginatedResult<T> {
   data: T[]
   nextCursor: string | null
+}
+
+export class RequestPartsItemDto {
+  @ApiProperty({ description: "ID del item de inventario (UUID v4)", example: "550e8400-e29b-41d4-a716-446655440000" })
+  @IsUUID("4", { message: "ID de item invalido" })
+  itemId: string
+
+  @ApiProperty({ description: "Cantidad a solicitar (1-99)", example: 2, minimum: 1, maximum: 99 })
+  @IsNumber()
+  @Min(1, { message: "Minimo 1 unidad" })
+  @Max(99, { message: "Maximo 99 unidades" })
+  quantity: number
+}
+
+export class RequestPartsDto {
+  @ApiProperty({ description: "Items de inventario a solicitar para la OT", type: [RequestPartsItemDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => RequestPartsItemDto)
+  items: RequestPartsItemDto[]
+}
+
+export class MechanicProgressDto {
+  @ApiProperty({ description: "Porcentaje de avance (0-100)", example: 75 })
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  progressPercent: number
+
+  @ApiProperty({ description: "Cantidad de repuestos instalados", example: 3 })
+  @IsNumber()
+  @Min(0)
+  partsInstalled: number
+
+  @ApiProperty({ description: "Horas de trabajo invertidas", example: 2.5 })
+  @IsNumber()
+  @Min(0)
+  laborHours: number
+
+  @ApiPropertyOptional({ description: "Notas descriptivas del avance", example: "Reparacion de frenos al 80%, falta purgado" })
+  @IsOptional()
+  @IsString()
+  notes?: string
 }

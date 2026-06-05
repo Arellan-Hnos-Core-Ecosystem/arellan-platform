@@ -1,9 +1,9 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, UseInterceptors, UploadedFile, Req } from "@nestjs/common"
-import { FileInterceptor } from "@nestjs/platform-express"
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, UseInterceptors, UploadedFile, Req, UploadedFiles } from "@nestjs/common"
+import { FileInterceptor, FilesInterceptor } from "@nestjs/platform-express"
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam, ApiConsumes, ApiBody } from "@nestjs/swagger"
 import { OrdersService } from "./orders.service"
 import { AuthUser } from "../auth/auth.service"
-import { CreateOrderDto, UpdateOrderDto, UpdateStatusDto, OrderFilterDto, ApplyDiscountDto } from "./dto/orders.dto"
+import { CreateOrderDto, UpdateOrderDto, UpdateStatusDto, OrderFilterDto, ApplyDiscountDto, RequestPartsDto, MechanicProgressDto } from "./dto/orders.dto"
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard"
 import { RolesGuard } from "../../common/guards/roles.guard"
 import { Roles } from "../../common/decorators/roles.decorator"
@@ -166,5 +166,79 @@ export class OrdersController {
   @ApiResponse({ status: 404, description: "OT no encontrada" })
   async uploadPhoto(@Param("id") id: string, @UploadedFile() photo: Express.Multer.File, @Body("description") description?: string) {
     return this.ordersService.uploadPhoto(id, photo, description)
+  }
+
+  @Post(":id/parts")
+  @Roles(UserRole.MECHANIC, UserRole.TRAINEE, UserRole.ADMIN, UserRole.OWNER)
+  @UseGuards(RolesGuard)
+  @ApiOperation({
+    summary: "Solicitar repuestos para una orden",
+    description: "Agrega repuestos del inventario a la OT con descuento automatico de stock. Procesa una lista de items y registra eventos PART_REQUESTED en la bitacora.",
+  })
+  @ApiParam({ name: "id", description: "ID de la OT (UUID v4)" })
+  @ApiResponse({ status: 201, description: "Repuestos solicitados y stock actualizado" })
+  @ApiResponse({ status: 400, description: "Datos invalidos" })
+  @ApiResponse({ status: 404, description: "OT o item no encontrado" })
+  @ApiResponse({ status: 409, description: "Stock insuficiente u OT finalizada" })
+  async requestParts(@Param("id") id: string, @Body() dto: RequestPartsDto, @CurrentUser() user: AuthUser) {
+    return this.ordersService.requestParts(id, dto, user.id, user.name)
+  }
+
+  @Post(":id/progress")
+  @Roles(UserRole.MECHANIC, UserRole.TRAINEE)
+  @UseGuards(RolesGuard)
+  @ApiOperation({
+    summary: "Reportar avance tecnico de una orden",
+    description: "Registra el porcentaje de avance, repuestos instalados y horas de trabajo. Crea un evento en la bitacora de la OT para trazabilidad completa.",
+  })
+  @ApiParam({ name: "id", description: "ID de la OT (UUID v4)" })
+  @ApiResponse({ status: 201, description: "Avance registrado en la bitacora" })
+  @ApiResponse({ status: 404, description: "OT no encontrada" })
+  async reportProgress(@Param("id") id: string, @Body() dto: MechanicProgressDto, @CurrentUser() user: AuthUser) {
+    return this.ordersService.reportProgress(id, dto, user.id, user.name)
+  }
+
+  @Delete(":id/photos/:photoId")
+  @Roles(UserRole.MECHANIC, UserRole.TRAINEE, UserRole.ADMIN, UserRole.OWNER)
+  @UseGuards(RolesGuard)
+  @ApiOperation({
+    summary: "Eliminar foto de una orden de trabajo",
+    description: "Elimina una foto asociada a la OT y registra un evento PHOTO_DELETED en la bitacora.",
+  })
+  @ApiParam({ name: "id", description: "ID de la OT (UUID v4)" })
+  @ApiParam({ name: "photoId", description: "ID de la foto a eliminar (UUID v4)" })
+  @ApiResponse({ status: 200, description: "Foto eliminada y evento registrado" })
+  @ApiResponse({ status: 404, description: "OT o foto no encontrada" })
+  async deletePhoto(@Param("id") id: string, @Param("photoId") photoId: string, @CurrentUser() user: AuthUser) {
+    return this.ordersService.deletePhoto(id, photoId, user.id, user.name)
+  }
+
+  @Post("checkin")
+  @Roles(UserRole.MECHANIC, UserRole.TRAINEE, UserRole.ADMIN, UserRole.OWNER)
+  @UseGuards(RolesGuard)
+  @UseInterceptors(FilesInterceptor("photos", 10))
+  @ApiOperation({
+    summary: "Ingreso rapido de vehiculo al taller",
+    description: "Crea o encuentra un vehiculo por placa y genera una OT nueva. Recibe fotos multipart del vehiculo. Usado desde la tablet por el mecanico al recibir un auto.",
+  })
+  @ApiConsumes("multipart/form-data")
+  @ApiBody({ schema: { type: "object", properties: {
+    plate: { type: "string", example: "ABC-123" },
+    brand: { type: "string", example: "Toyota" },
+    model: { type: "string", example: "Hiace" },
+    kilometerReading: { type: "string", example: "85000" },
+    fuelLevel: { type: "string", example: "HALF" },
+    description: { type: "string", example: "Cambio de aceite y filtros" },
+    photoPositions: { type: "string", example: "FRONT,BACK,LEFT,RIGHT" },
+    photos: { type: "array", items: { type: "string", format: "binary" } },
+  } } })
+  @ApiResponse({ status: 201, description: "Vehiculo ingresado y OT creada" })
+  @ApiResponse({ status: 409, description: "Ya existe una OT activa para esa placa" })
+  async vehicleCheckin(
+    @Body() body: { plate: string; brand: string; model: string; kilometerReading?: string; fuelLevel?: string; description?: string; photoPositions?: string },
+    @UploadedFiles() photos?: Express.Multer.File[],
+    @CurrentUser() user?: AuthUser,
+  ) {
+    return this.ordersService.vehicleCheckin(body, photos ?? [], user?.id ?? "system", user?.name ?? "Sistema")
   }
 }

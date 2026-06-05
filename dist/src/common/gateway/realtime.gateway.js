@@ -17,12 +17,15 @@ const websockets_1 = require("@nestjs/websockets");
 const socket_io_1 = require("socket.io");
 const common_1 = require("@nestjs/common");
 const jwt_1 = require("@nestjs/jwt");
+const prisma_service_1 = require("../prisma/prisma.service");
 let RealtimeGateway = class RealtimeGateway {
     jwtService;
+    prisma;
     server;
     logger = new common_1.Logger("RealtimeGateway");
-    constructor(jwtService) {
+    constructor(jwtService, prisma) {
         this.jwtService = jwtService;
+        this.prisma = prisma;
     }
     afterInit() {
         this.logger.log("Realtime WebSocket Gateway initialized");
@@ -158,11 +161,33 @@ let RealtimeGateway = class RealtimeGateway {
         client.leave(`order:${orderId}`);
         return { success: true };
     }
-    handleMechanicProgress(_client, data) {
+    async handleMechanicProgress(_client, data) {
         this.emitMechanicProgress({
             ...data,
             timestamp: data.timestamp || new Date().toISOString(),
         });
+        try {
+            await this.prisma.workOrderEvent.create({
+                data: {
+                    workOrderId: data.orderId,
+                    event: "PROGRESS_REPORTED",
+                    description: data.notes
+                        ? `${data.mechanicName} registró avance técnico: ${data.notes} (${data.progressPercent}%)`
+                        : `${data.mechanicName} reportó avance del ${data.progressPercent}% - ${data.partsInstalled} repuestos instalados, ${data.laborHours}h trabajadas`,
+                    metadata: {
+                        progressPercent: data.progressPercent,
+                        partsInstalled: data.partsInstalled,
+                        laborHours: data.laborHours,
+                        notes: data.notes ?? null,
+                    },
+                    userId: data.mechanicId,
+                },
+            });
+            this.logger.log(`Progreso WS persistido en DB: OT ${data.orderNumber || data.orderId} - ${data.mechanicName}`);
+        }
+        catch (e) {
+            this.logger.error(`Error al persistir progreso WS: ${e.message}`);
+        }
         return { success: true, eventId: `progress-${Date.now()}` };
     }
     handleClientSubscribe(client, data) {
@@ -223,7 +248,7 @@ __decorate([
     __param(1, (0, websockets_1.MessageBody)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [socket_io_1.Socket, Object]),
-    __metadata("design:returntype", void 0)
+    __metadata("design:returntype", Promise)
 ], RealtimeGateway.prototype, "handleMechanicProgress", null);
 __decorate([
     (0, websockets_1.SubscribeMessage)("client:subscribe"),
@@ -264,6 +289,7 @@ exports.RealtimeGateway = RealtimeGateway = __decorate([
         namespace: "/",
         transports: ["websocket"],
     }),
-    __metadata("design:paramtypes", [jwt_1.JwtService])
+    __metadata("design:paramtypes", [jwt_1.JwtService,
+        prisma_service_1.PrismaService])
 ], RealtimeGateway);
 //# sourceMappingURL=realtime.gateway.js.map
