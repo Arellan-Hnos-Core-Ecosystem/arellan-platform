@@ -79,8 +79,8 @@ export declare class PersonnelService {
                 authorizedBy: string | null;
                 purpose: string;
                 destination: string | null;
-                checkoutAt: Date;
                 expectedReturn: Date;
+                checkoutAt: Date;
                 returnAt: Date | null;
             })[];
             _count: {
@@ -317,8 +317,8 @@ export declare class PersonnelService {
         authorizedBy: string | null;
         purpose: string;
         destination: string | null;
-        checkoutAt: Date;
         expectedReturn: Date;
+        checkoutAt: Date;
         returnAt: Date | null;
     }>;
     getActiveVehicleUsages(): Promise<({
@@ -360,8 +360,8 @@ export declare class PersonnelService {
         authorizedBy: string | null;
         purpose: string;
         destination: string | null;
-        checkoutAt: Date;
         expectedReturn: Date;
+        checkoutAt: Date;
         returnAt: Date | null;
     })[]>;
     returnVehicle(usageId: string, odometerIn: number): Promise<{
@@ -377,8 +377,8 @@ export declare class PersonnelService {
         authorizedBy: string | null;
         purpose: string;
         destination: string | null;
-        checkoutAt: Date;
         expectedReturn: Date;
+        checkoutAt: Date;
         returnAt: Date | null;
     }>;
     getPerformanceReport(personnelId: string): Promise<{
@@ -468,8 +468,8 @@ export declare class PersonnelService {
         authorizedBy: string | null;
         purpose: string;
         destination: string | null;
-        checkoutAt: Date;
         expectedReturn: Date;
+        checkoutAt: Date;
         returnAt: Date | null;
     })[]>;
     getAllSecurityList(requestingUserRole: UserRole): Promise<{

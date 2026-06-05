@@ -81,8 +81,8 @@ export declare class VehiclesService {
             authorizedBy: string | null;
             purpose: string;
             destination: string | null;
-            checkoutAt: Date;
             expectedReturn: Date;
+            checkoutAt: Date;
             returnAt: Date | null;
         })[];
     } & {

@@ -78,8 +78,8 @@ export declare class PersonnelController {
                 authorizedBy: string | null;
                 purpose: string;
                 destination: string | null;
-                checkoutAt: Date;
                 expectedReturn: Date;
+                checkoutAt: Date;
                 returnAt: Date | null;
             })[];
             _count: {
@@ -222,8 +222,8 @@ export declare class PersonnelController {
         authorizedBy: string | null;
         purpose: string;
         destination: string | null;
-        checkoutAt: Date;
         expectedReturn: Date;
+        checkoutAt: Date;
         returnAt: Date | null;
     }>;
     getActiveVehicleUsages(): Promise<({
@@ -265,8 +265,8 @@ export declare class PersonnelController {
         authorizedBy: string | null;
         purpose: string;
         destination: string | null;
-        checkoutAt: Date;
         expectedReturn: Date;
+        checkoutAt: Date;
         returnAt: Date | null;
     })[]>;
     getOverdueVehicleUsages(): Promise<({
@@ -308,8 +308,8 @@ export declare class PersonnelController {
         authorizedBy: string | null;
         purpose: string;
         destination: string | null;
-        checkoutAt: Date;
         expectedReturn: Date;
+        checkoutAt: Date;
         returnAt: Date | null;
     })[]>;
 }

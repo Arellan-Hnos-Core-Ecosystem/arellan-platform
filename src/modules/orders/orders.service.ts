@@ -207,8 +207,9 @@ export class OrdersService {
     const totalPaid = order.payments.reduce((sum, p) => sum + Number(p.amount), 0)
 
     if (totalRequired <= 0) {
-      this.logger.warn(`OT ${order.number}: entrega sin costos registrados`)
-      return
+      throw new BadRequestException(
+        "🔒 Operación cancelada: No se puede entregar un vehículo sin costos ni liquidación registrada en el sistema.",
+      )
     }
 
     if (totalPaid < totalRequired) {

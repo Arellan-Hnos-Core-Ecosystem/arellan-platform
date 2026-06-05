@@ -200,8 +200,7 @@ let OrdersService = OrdersService_1 = class OrdersService {
         const totalRequired = laborCost + partsCost;
         const totalPaid = order.payments.reduce((sum, p) => sum + Number(p.amount), 0);
         if (totalRequired <= 0) {
-            this.logger.warn(`OT ${order.number}: entrega sin costos registrados`);
-            return;
+            throw new common_1.BadRequestException("🔒 Operación cancelada: No se puede entregar un vehículo sin costos ni liquidación registrada en el sistema.");
         }
         if (totalPaid < totalRequired) {
             const pending = totalRequired - totalPaid;
