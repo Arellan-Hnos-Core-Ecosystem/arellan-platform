@@ -3,12 +3,18 @@ import {
   ConflictException,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
   Logger,
   Inject,
+  HttpException,
+  HttpStatus,
 } from "@nestjs/common"
 import { InjectQueue } from "@nestjs/bullmq"
 import { Queue } from "bullmq"
+import * as crypto from "crypto"
 import { PrismaService } from "../../common/prisma/prisma.service"
+import { RedisService } from "../../common/redis/redis.service"
+import { RealtimeGateway } from "../../common/gateway/realtime.gateway"
 import { QueueName } from "../../queues/queue-names.enum"
 import {
   OpenCashboxDto,
@@ -38,6 +44,8 @@ export class FinanceService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
+    private readonly realtimeGateway: RealtimeGateway,
     @InjectQueue(QueueName.ALERT_DISPATCHER) private readonly alertQueue: Queue,
   ) {}
 
@@ -526,5 +534,66 @@ export class FinanceService {
         approver: { select: { id: true, name: true, role: true } },
       },
     })
+  }
+
+  async generatePaymentQR(workOrderId: string, userId: string) {
+    const order = await this.prisma.workOrder.findUnique({
+      where: { id: workOrderId },
+      include: { client: { select: { firstName: true, lastName: true } } },
+    })
+    if (!order) throw new NotFoundException("Orden no encontrada")
+    if (order.paymentStatus === "PAID") throw new ConflictException("Esta orden ya esta pagada")
+
+    const qrToken = crypto.randomUUID()
+    const expiresAt = new Date(Date.now() + 7 * 60 * 1000)
+    const amount = Number(order.finalAmount || order.totalCost || 0)
+
+    await this.redis.set(`qr:payment:${qrToken}`, JSON.stringify({
+      workOrderId, amount, orderId: order.number, createdBy: userId,
+    }), 420)
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId, userName: "system", role: "FINANCE" as any,
+        action: "PAYMENT_QR_GENERATED", entity: "WorkOrder",
+        entityId: workOrderId, severity: "INFO",
+        ipAddress: "system",
+        metadata: { qrToken, amount, expiresAt } as any,
+      },
+    })
+
+    return {
+      qrToken, amount, orderId: order.number, expiresAt,
+      message: "QR valido por 7 minutos. No compartir Yape personal.",
+    }
+  }
+
+  async confirmPaymentWebhook(qrToken: string, paymentMethod: string, reference?: string) {
+    const processed = await this.redis.get(`payment:processed:${qrToken}`)
+    if (processed) return { status: "already_processed" }
+
+    const qrData = await this.redis.get(`qr:payment:${qrToken}`)
+    if (!qrData) throw new BadRequestException("QR expirado o invalido")
+
+    const { workOrderId, amount } = JSON.parse(qrData)
+
+    await this.redis.set(`payment:processed:${qrToken}`, "processed", 86400)
+
+    const payment = await this.prisma.payment.create({
+      data: {
+        workOrderId, method: paymentMethod || "YAPE" as any, amount,
+        reference: reference || qrToken, isPersonalYape: false,
+        receivedBy: "system",
+        paidAt: new Date(),
+      },
+    })
+
+    await this.redis.del(`qr:payment:${qrToken}`)
+
+    this.realtimeGateway?.emitPaymentReceived({
+      workOrderId, amount, method: paymentMethod || "YAPE", receivedBy: "system", isAlert: false,
+    })
+
+    return { status: "confirmed", payment }
   }
 }

@@ -9,6 +9,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.FinanceModule = void 0;
 const common_1 = require("@nestjs/common");
 const finance_controller_1 = require("./finance.controller");
+const alerts_controller_1 = require("./alerts.controller");
+const payment_webhook_controller_1 = require("./payment-webhook.controller");
 const finance_service_1 = require("./finance.service");
 const cache_manager_service_1 = require("../../common/cache/cache-manager.service");
 let FinanceModule = class FinanceModule {
@@ -16,7 +18,7 @@ let FinanceModule = class FinanceModule {
 exports.FinanceModule = FinanceModule;
 exports.FinanceModule = FinanceModule = __decorate([
     (0, common_1.Module)({
-        controllers: [finance_controller_1.FinanceController],
+        controllers: [finance_controller_1.FinanceController, alerts_controller_1.AlertsController, payment_webhook_controller_1.PaymentWebhookController],
         providers: [
             finance_service_1.FinanceService,
             {

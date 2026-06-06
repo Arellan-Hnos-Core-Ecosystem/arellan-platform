@@ -1,12 +1,16 @@
 import { Queue } from "bullmq";
 import { PrismaService } from "../../common/prisma/prisma.service";
+import { RedisService } from "../../common/redis/redis.service";
+import { RealtimeGateway } from "../../common/gateway/realtime.gateway";
 import { OpenCashboxDto, CloseCashboxDto, CreateTransactionDto, CreateExpenseDto, ApproveExpenseDto, ExpenseFiltersDto } from "./dto/finance.dto";
 import { Prisma } from "@prisma/client";
 export declare class FinanceService {
     private readonly prisma;
+    private readonly redis;
+    private readonly realtimeGateway;
     private readonly alertQueue;
     private readonly logger;
-    constructor(prisma: PrismaService, alertQueue: Queue);
+    constructor(prisma: PrismaService, redis: RedisService, realtimeGateway: RealtimeGateway, alertQueue: Queue);
     openCashbox(userId: string, dto: OpenCashboxDto): Promise<{
         openedBy: {
             id: string;
@@ -18,13 +22,13 @@ export declare class FinanceService {
         status: import(".prisma/client").$Enums.CashboxStatus;
         notes: string | null;
         openingBalance: Prisma.Decimal;
-        actualCash: Prisma.Decimal | null;
-        openedById: string;
-        closedById: string | null;
         closingBalance: Prisma.Decimal | null;
+        actualCash: Prisma.Decimal | null;
         discrepancy: Prisma.Decimal | null;
         openedAt: Date;
         closedAt: Date | null;
+        openedById: string;
+        closedById: string | null;
     }>;
     closeCashbox(userId: string, dto: CloseCashboxDto): Promise<{
         transactions: {
@@ -50,13 +54,13 @@ export declare class FinanceService {
         status: import(".prisma/client").$Enums.CashboxStatus;
         notes: string | null;
         openingBalance: Prisma.Decimal;
-        actualCash: Prisma.Decimal | null;
-        openedById: string;
-        closedById: string | null;
         closingBalance: Prisma.Decimal | null;
+        actualCash: Prisma.Decimal | null;
         discrepancy: Prisma.Decimal | null;
         openedAt: Date;
         closedAt: Date | null;
+        openedById: string;
+        closedById: string | null;
     }>;
     getTodaySession(): Promise<{
         open: boolean;
@@ -88,13 +92,13 @@ export declare class FinanceService {
             status: import(".prisma/client").$Enums.CashboxStatus;
             notes: string | null;
             openingBalance: Prisma.Decimal;
-            actualCash: Prisma.Decimal | null;
-            openedById: string;
-            closedById: string | null;
             closingBalance: Prisma.Decimal | null;
+            actualCash: Prisma.Decimal | null;
             discrepancy: Prisma.Decimal | null;
             openedAt: Date;
             closedAt: Date | null;
+            openedById: string;
+            closedById: string | null;
         };
         message?: undefined;
     }>;
@@ -245,13 +249,13 @@ export declare class FinanceService {
             status: import(".prisma/client").$Enums.CashboxStatus;
             notes: string | null;
             openingBalance: Prisma.Decimal;
-            actualCash: Prisma.Decimal | null;
-            openedById: string;
-            closedById: string | null;
             closingBalance: Prisma.Decimal | null;
+            actualCash: Prisma.Decimal | null;
             discrepancy: Prisma.Decimal | null;
             openedAt: Date;
             closedAt: Date | null;
+            openedById: string;
+            closedById: string | null;
         })[];
         nextCursor: string | null;
     }>;
@@ -345,5 +349,35 @@ export declare class FinanceService {
     }) | {
         status: string;
         message: string;
+    }>;
+    generatePaymentQR(workOrderId: string, userId: string): Promise<{
+        qrToken: `${string}-${string}-${string}-${string}-${string}`;
+        amount: number;
+        orderId: string;
+        expiresAt: Date;
+        message: string;
+    }>;
+    confirmPaymentWebhook(qrToken: string, paymentMethod: string, reference?: string): Promise<{
+        status: string;
+        payment?: undefined;
+    } | {
+        status: string;
+        payment: {
+            id: string;
+            createdAt: Date;
+            notes: string | null;
+            verifiedBy: string | null;
+            amount: Prisma.Decimal;
+            workOrderId: string | null;
+            invoiceId: string | null;
+            method: import(".prisma/client").$Enums.PaymentMethod;
+            reference: string | null;
+            receivedBy: string;
+            channel: import(".prisma/client").$Enums.PaymentChannel;
+            isPersonalYape: boolean;
+            yapeAccount: string | null;
+            receiptUrl: string | null;
+            paidAt: Date;
+        };
     }>;
 }

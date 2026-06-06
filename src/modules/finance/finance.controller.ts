@@ -167,4 +167,13 @@ export class FinanceController {
   getCashboxHistory(@Query("limit") limit?: number, @Query("cursor") cursor?: string) {
     return this.financeService.getCashboxHistory(limit, cursor)
   }
+
+  @Post("qr/generate")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.OWNER, UserRole.FINANCE)
+  @ApiBearerAuth("access-token")
+  @ApiOperation({ summary: "Generar QR dinamico de cobro", description: "Genera QR de pago para una OT con expiracion de 7 minutos." })
+  async generatePaymentQR(@CurrentUser() user: AuthUser, @Body() body: { workOrderId: string }) {
+    return this.financeService.generatePaymentQR(body.workOrderId, user.id)
+  }
 }

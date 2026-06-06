@@ -27,18 +27,44 @@ let AuthController = class AuthController {
     constructor(authService) {
         this.authService = authService;
     }
-    login(dto, req) {
+    async login(dto, req, res) {
         const ip = req.ip || req.socket?.remoteAddress || "unknown";
         const userAgent = req.headers?.["user-agent"];
-        return this.authService.login(dto, ip, userAgent);
+        const result = await this.authService.login(dto, ip, userAgent);
+        if (!result.mfaPending) {
+            res.cookie("arellan-auth", "true", {
+                httpOnly: false,
+                secure: false,
+                sameSite: "lax",
+                path: "/",
+                maxAge: 7 * 24 * 60 * 60 * 1000,
+            });
+        }
+        return result;
     }
-    mechanicLogin(dto, req) {
+    async mechanicLogin(dto, req, res) {
         const ip = req.ip || req.socket?.remoteAddress || "unknown";
         const userAgent = req.headers?.["user-agent"];
-        return this.authService.mechanicLogin(dto.pin, ip, userAgent);
+        const result = await this.authService.mechanicLogin(dto.pin, ip, userAgent);
+        res.cookie("arellan-auth", "true", {
+            httpOnly: false,
+            secure: false,
+            sameSite: "lax",
+            path: "/",
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+        });
+        return result;
     }
-    verifyMfa(dto) {
-        return this.authService.verifyMfa(dto);
+    async verifyMfa(dto, res) {
+        const result = await this.authService.verifyMfa(dto);
+        res.cookie("arellan-auth", "true", {
+            httpOnly: false,
+            secure: false,
+            sameSite: "lax",
+            path: "/",
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+        });
+        return result;
     }
     register(dto) {
         return this.authService.register(dto);
@@ -91,9 +117,10 @@ __decorate([
     (0, swagger_1.ApiResponse)({ status: 429, description: "Cuenta bloqueada por multiples intentos fallidos" }),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, common_1.Req)()),
+    __param(2, (0, common_1.Res)({ passthrough: true })),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [auth_dto_1.LoginDto, Object]),
-    __metadata("design:returntype", void 0)
+    __metadata("design:paramtypes", [auth_dto_1.LoginDto, Object, Object]),
+    __metadata("design:returntype", Promise)
 ], AuthController.prototype, "login", null);
 __decorate([
     (0, common_1.Post)("mechanic/login"),
@@ -106,9 +133,10 @@ __decorate([
     (0, swagger_1.ApiResponse)({ status: 401, description: "PIN invalido, cuenta inactiva o rol no autorizado para tablet" }),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, common_1.Req)()),
+    __param(2, (0, common_1.Res)({ passthrough: true })),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [auth_dto_1.MechanicLoginDto, Object]),
-    __metadata("design:returntype", void 0)
+    __metadata("design:paramtypes", [auth_dto_1.MechanicLoginDto, Object, Object]),
+    __metadata("design:returntype", Promise)
 ], AuthController.prototype, "mechanicLogin", null);
 __decorate([
     (0, common_1.Post)("mfa/verify"),
@@ -120,9 +148,10 @@ __decorate([
     (0, swagger_1.ApiResponse)({ status: 200, description: "MFA verificado - retorna accessToken, refreshToken y datos del usuario" }),
     (0, swagger_1.ApiResponse)({ status: 401, description: "Codigo TOTP invalido o sesion expirada" }),
     __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Res)({ passthrough: true })),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [auth_dto_1.MfaVerifyDto]),
-    __metadata("design:returntype", void 0)
+    __metadata("design:paramtypes", [auth_dto_1.MfaVerifyDto, Object]),
+    __metadata("design:returntype", Promise)
 ], AuthController.prototype, "verifyMfa", null);
 __decorate([
     (0, common_1.Post)("register"),

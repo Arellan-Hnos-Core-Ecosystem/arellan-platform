@@ -15,13 +15,13 @@ export declare class FinanceController {
         status: import(".prisma/client").$Enums.CashboxStatus;
         notes: string | null;
         openingBalance: import("@prisma/client/runtime/library").Decimal;
-        actualCash: import("@prisma/client/runtime/library").Decimal | null;
-        openedById: string;
-        closedById: string | null;
         closingBalance: import("@prisma/client/runtime/library").Decimal | null;
+        actualCash: import("@prisma/client/runtime/library").Decimal | null;
         discrepancy: import("@prisma/client/runtime/library").Decimal | null;
         openedAt: Date;
         closedAt: Date | null;
+        openedById: string;
+        closedById: string | null;
     }>;
     closeCashbox(user: AuthUser, dto: CloseCashboxDto): Promise<{
         transactions: {
@@ -47,13 +47,13 @@ export declare class FinanceController {
         status: import(".prisma/client").$Enums.CashboxStatus;
         notes: string | null;
         openingBalance: import("@prisma/client/runtime/library").Decimal;
-        actualCash: import("@prisma/client/runtime/library").Decimal | null;
-        openedById: string;
-        closedById: string | null;
         closingBalance: import("@prisma/client/runtime/library").Decimal | null;
+        actualCash: import("@prisma/client/runtime/library").Decimal | null;
         discrepancy: import("@prisma/client/runtime/library").Decimal | null;
         openedAt: Date;
         closedAt: Date | null;
+        openedById: string;
+        closedById: string | null;
     }>;
     getTodaySession(): Promise<{
         open: boolean;
@@ -85,13 +85,13 @@ export declare class FinanceController {
             status: import(".prisma/client").$Enums.CashboxStatus;
             notes: string | null;
             openingBalance: import("@prisma/client/runtime/library").Decimal;
-            actualCash: import("@prisma/client/runtime/library").Decimal | null;
-            openedById: string;
-            closedById: string | null;
             closingBalance: import("@prisma/client/runtime/library").Decimal | null;
+            actualCash: import("@prisma/client/runtime/library").Decimal | null;
             discrepancy: import("@prisma/client/runtime/library").Decimal | null;
             openedAt: Date;
             closedAt: Date | null;
+            openedById: string;
+            closedById: string | null;
         };
         message?: undefined;
     }>;
@@ -267,14 +267,23 @@ export declare class FinanceController {
             status: import(".prisma/client").$Enums.CashboxStatus;
             notes: string | null;
             openingBalance: import("@prisma/client/runtime/library").Decimal;
-            actualCash: import("@prisma/client/runtime/library").Decimal | null;
-            openedById: string;
-            closedById: string | null;
             closingBalance: import("@prisma/client/runtime/library").Decimal | null;
+            actualCash: import("@prisma/client/runtime/library").Decimal | null;
             discrepancy: import("@prisma/client/runtime/library").Decimal | null;
             openedAt: Date;
             closedAt: Date | null;
+            openedById: string;
+            closedById: string | null;
         })[];
         nextCursor: string | null;
+    }>;
+    generatePaymentQR(user: AuthUser, body: {
+        workOrderId: string;
+    }): Promise<{
+        qrToken: `${string}-${string}-${string}-${string}-${string}`;
+        amount: number;
+        orderId: string;
+        expiresAt: Date;
+        message: string;
     }>;
 }

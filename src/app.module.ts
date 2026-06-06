@@ -28,7 +28,9 @@ import { AuditModule } from "./modules/audit/audit.module"
 import { HealthModule } from "./common/health/health.module"
 import { PublicModule } from "./common/public/public.module"
 import { AntiFraudModule } from "./common/anti-fraud/anti-fraud.module"
+import { DashboardModule } from "./modules/dashboard/dashboard.module"
 import { AuditInterceptor } from "./common/interceptors/audit.interceptor"
+import { DataMaskingInterceptor } from "./common/interceptors/data-masking.interceptor"
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -59,10 +61,12 @@ import { AuditInterceptor } from "./common/interceptors/audit.interceptor"
     HealthModule,
     PublicModule,
     AntiFraudModule,
+    DashboardModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
+    { provide: APP_INTERCEPTOR, useClass: DataMaskingInterceptor },
   ],
 })
 export class AppModule {}

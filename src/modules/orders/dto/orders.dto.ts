@@ -101,6 +101,7 @@ export class OrderFilterDto {
 
   @ApiPropertyOptional({ description: "Cantidad de resultados por pagina (1-100)", example: 20, minimum: 1, maximum: 100, default: 20 })
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(1, { message: "Limite minimo es 1" })
   @Max(100, { message: "Limite maximo es 100" })

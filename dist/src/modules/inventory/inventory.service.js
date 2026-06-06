@@ -238,6 +238,27 @@ let InventoryService = InventoryService_1 = class InventoryService {
         return result;
     }
     async reserveForOrder(itemId, quantity, workOrderId, userId) {
+        if (!workOrderId) {
+            throw new common_1.HttpException({
+                statusCode: 422,
+                error: "INVENTORY_NO_ACTIVE_ORDER",
+                message: "No se puede retirar inventario sin una Orden de Trabajo activa vinculada.",
+            }, common_1.HttpStatus.UNPROCESSABLE_ENTITY);
+        }
+        const order = await this.prisma.workOrder.findUnique({
+            where: { id: workOrderId },
+            select: { id: true, status: true, number: true },
+        });
+        if (!order)
+            throw new common_1.NotFoundException(`OT ${workOrderId} no encontrada`);
+        const ALLOWED_STATUSES = ["RECEIVED", "IN_DIAGNOSIS", "BUDGETED", "IN_PROGRESS", "IN_REVIEW"];
+        if (!ALLOWED_STATUSES.includes(order.status)) {
+            throw new common_1.HttpException({
+                statusCode: 422,
+                error: "INVENTORY_ORDER_INVALID_STATUS",
+                message: `La OT ${order.number} esta en estado ${order.status} y no permite salida de inventario.`,
+            }, common_1.HttpStatus.UNPROCESSABLE_ENTITY);
+        }
         const result = await this.prisma.$transaction(async (tx) => {
             const item = await tx.inventoryItem.findUnique({ where: { id: itemId } });
             if (!item)

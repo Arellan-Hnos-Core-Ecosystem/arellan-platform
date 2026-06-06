@@ -10,10 +10,10 @@ export declare class AuditController {
         id: string;
         role: string;
         createdAt: Date;
-        userName: string;
-        action: string;
         entity: string | null;
         entityId: string | null;
+        userName: string;
+        action: string;
         beforeState: import("@prisma/client/runtime/library").JsonValue | null;
         afterState: import("@prisma/client/runtime/library").JsonValue | null;
         integrityHash: string | null;

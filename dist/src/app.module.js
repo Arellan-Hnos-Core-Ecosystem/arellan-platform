@@ -37,7 +37,9 @@ const audit_module_1 = require("./modules/audit/audit.module");
 const health_module_1 = require("./common/health/health.module");
 const public_module_1 = require("./common/public/public.module");
 const anti_fraud_module_1 = require("./common/anti-fraud/anti-fraud.module");
+const dashboard_module_1 = require("./modules/dashboard/dashboard.module");
 const audit_interceptor_1 = require("./common/interceptors/audit.interceptor");
+const data_masking_interceptor_1 = require("./common/interceptors/data-masking.interceptor");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -72,10 +74,12 @@ exports.AppModule = AppModule = __decorate([
             health_module_1.HealthModule,
             public_module_1.PublicModule,
             anti_fraud_module_1.AntiFraudModule,
+            dashboard_module_1.DashboardModule,
         ],
         providers: [
             { provide: core_1.APP_GUARD, useClass: throttler_1.ThrottlerGuard },
             { provide: core_1.APP_INTERCEPTOR, useClass: audit_interceptor_1.AuditInterceptor },
+            { provide: core_1.APP_INTERCEPTOR, useClass: data_masking_interceptor_1.DataMaskingInterceptor },
         ],
     })
 ], AppModule);

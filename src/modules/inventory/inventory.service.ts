@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException, Logger } from "@nestjs/common"
+import { Injectable, NotFoundException, ConflictException, BadRequestException, Logger, HttpException, HttpStatus } from "@nestjs/common"
 import { PrismaService } from "../../common/prisma/prisma.service"
 import { RedisService } from "../../common/redis/redis.service"
 import { CreateItemDto, UpdateItemDto, InventoryMovementDto } from "./dto/inventory.dto"
@@ -269,6 +269,35 @@ export class InventoryService {
     workOrderId: string,
     userId: string,
   ) {
+    if (!workOrderId) {
+      throw new HttpException(
+        {
+          statusCode: 422,
+          error: "INVENTORY_NO_ACTIVE_ORDER",
+          message: "No se puede retirar inventario sin una Orden de Trabajo activa vinculada.",
+        },
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      )
+    }
+
+    const order = await this.prisma.workOrder.findUnique({
+      where: { id: workOrderId },
+      select: { id: true, status: true, number: true },
+    })
+    if (!order) throw new NotFoundException(`OT ${workOrderId} no encontrada`)
+
+    const ALLOWED_STATUSES = ["RECEIVED", "IN_DIAGNOSIS", "BUDGETED", "IN_PROGRESS", "IN_REVIEW"]
+    if (!ALLOWED_STATUSES.includes(order.status)) {
+      throw new HttpException(
+        {
+          statusCode: 422,
+          error: "INVENTORY_ORDER_INVALID_STATUS",
+          message: `La OT ${order.number} esta en estado ${order.status} y no permite salida de inventario.`,
+        },
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      )
+    }
+
     const result = await this.prisma.$transaction(async (tx) => {
       const item = await tx.inventoryItem.findUnique({ where: { id: itemId } })
       if (!item) throw new NotFoundException(`Item ${itemId} no encontrado`)

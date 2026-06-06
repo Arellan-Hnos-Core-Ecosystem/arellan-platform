@@ -487,6 +487,54 @@ async function main() {
   console.log("  16 gastos")
   console.log("  12 configuraciones")
   console.log("  12 notificaciones")
+
+  // ========== CASHBOX SESSION (hoy) ==========
+  console.log("Creando sesión de caja...")
+  const todayStart = new Date()
+  todayStart.setHours(0, 0, 0, 0)
+  const cashboxCount = await prisma.cashboxSession.count({ where: { openedAt: { gte: todayStart } } })
+  if (cashboxCount === 0) {
+    const cashbox = await prisma.cashboxSession.create({
+      data: {
+        openedById: an.id,
+        openingBalance: 500,
+        status: "OPEN",
+        openedAt: new Date(),
+      },
+    })
+    await prisma.financialTransaction.createMany({
+      data: [
+        { sessionId: cashbox.id, type: "PAYMENT", amount: 295, paymentMethod: "CASH", description: "Pago OT-2026-0001 - Roberto Gonzales", createdAt: new Date() },
+        { sessionId: cashbox.id, type: "PAYMENT", amount: 580, paymentMethod: "YAPE", description: "Pago OT-2026-0005 - José Mendoza", createdAt: new Date() },
+        { sessionId: cashbox.id, type: "PAYMENT", amount: 930, paymentMethod: "CASH", description: "Pago OT-2026-0015 - Diego Ríos", createdAt: new Date() },
+        { sessionId: cashbox.id, type: "PAYMENT", amount: 1290, paymentMethod: "YAPE", description: "Pago OT-2026-0010 - Pedro Salazar", createdAt: new Date() },
+      ],
+    })
+    console.log("  OK sesión de caja + 4 transacciones")
+  } else { console.log("  Caja ya existe hoy, omitiendo") }
+
+  // ========== AUDIT LOGS (críticos para /alerts) ==========
+  console.log("Creando logs de auditoría...")
+  const auditCount = await prisma.auditLog.count()
+  if (auditCount === 0) {
+    await prisma.auditLog.createMany({
+      data: [
+        { userId: an.id, userName: "Ana Arellan", role: "ADMIN", action: "LOGIN", ipAddress: "192.168.1.100", severity: "INFO", createdAt: daysAgo(0, 7, 30) },
+        { userId: so.id, userName: "Sofía Arellan", role: "FINANCE", action: "EXPENSE_APPROVED", entity: "expense", entityId: "exp-1", ipAddress: "192.168.1.102", severity: "INFO", createdAt: daysAgo(1, 9, 0) },
+        { userId: ed.id, userName: "Edgar Arellan", role: "OWNER", action: "CONFIG_CHANGED", entity: "setting", entityId: "yape_qr_url", ipAddress: "192.168.1.101", severity: "WARNING", createdAt: daysAgo(2, 14, 0) },
+        { userId: ju.id, userName: "Juan Arellan", role: "OWNER", action: "ORDER_CANCELLED", entity: "work_order", entityId: "OT-2026-0009", ipAddress: "192.168.1.105", severity: "WARNING", createdAt: daysAgo(1, 16, 0) },
+        { userId: an.id, userName: "Ana Arellan", role: "ADMIN", action: "CASHBOX_OPENED", entity: "cashbox", ipAddress: "192.168.1.100", severity: "INFO", createdAt: daysAgo(0, 7, 45) },
+        { userId: ed.id, userName: "Edgar Arellan", role: "OWNER", action: "SECURITY", entity: "auth", ipAddress: "190.234.12.45", severity: "SECURITY_ALERT", createdAt: daysAgo(0, 8, 0) },
+        { userId: an.id, userName: "Ana Arellan", role: "ADMIN", action: "CRITICAL_STOCK", entity: "inventory", entityId: "FIL-004", ipAddress: "192.168.1.100", severity: "CRITICAL", createdAt: daysAgo(0, 9, 30) },
+        { userId: ju.id, userName: "Juan Arellan", role: "OWNER", action: "CRITICAL_STOCK", entity: "inventory", entityId: "FRE-005", ipAddress: "192.168.1.105", severity: "CRITICAL", createdAt: daysAgo(0, 10, 15) },
+        { userId: ed.id, userName: "Edgar Arellan", role: "OWNER", action: "CRITICAL_STOCK", entity: "inventory", entityId: "ACE-002", ipAddress: "192.168.1.101", severity: "CRITICAL", createdAt: daysAgo(0, 11, 0) },
+      ],
+    })
+    console.log("  OK 9 logs de auditoría")
+  } else { console.log("  Logs ya existentes, omitiendo") }
+
+  console.log()
+
 }
 
 main()

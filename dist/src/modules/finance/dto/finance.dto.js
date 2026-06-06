@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ExpenseFiltersDto = exports.ApproveExpenseDto = exports.CreateExpenseDto = exports.CreateTransactionDto = exports.CloseCashboxDto = exports.OpenCashboxDto = void 0;
 const class_validator_1 = require("class-validator");
+const class_transformer_1 = require("class-transformer");
 const client_1 = require("@prisma/client");
 const swagger_1 = require("@nestjs/swagger");
 class OpenCashboxDto {
@@ -175,6 +176,7 @@ __decorate([
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({ description: "Numero de pagina (min 1)", example: 1, minimum: 1, default: 1 }),
     (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
     (0, class_validator_1.IsNumber)({}, { message: "page debe ser numero" }),
     (0, class_validator_1.Min)(1),
     __metadata("design:type", Number)
@@ -182,6 +184,7 @@ __decorate([
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({ description: "Resultados por pagina (1-100)", example: 20, minimum: 1, maximum: 100, default: 20 }),
     (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
     (0, class_validator_1.IsNumber)({}, { message: "size debe ser numero" }),
     (0, class_validator_1.Min)(1),
     (0, class_validator_1.Max)(100),

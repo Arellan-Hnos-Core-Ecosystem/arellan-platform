@@ -17,17 +17,24 @@ exports.FinanceService = void 0;
 const common_1 = require("@nestjs/common");
 const bullmq_1 = require("@nestjs/bullmq");
 const bullmq_2 = require("bullmq");
+const crypto = require("crypto");
 const prisma_service_1 = require("../../common/prisma/prisma.service");
+const redis_service_1 = require("../../common/redis/redis.service");
+const realtime_gateway_1 = require("../../common/gateway/realtime.gateway");
 const queue_names_enum_1 = require("../../queues/queue-names.enum");
 const client_1 = require("@prisma/client");
 const SUSPICIOUS_EXPENSE_THRESHOLD = 200;
 const SUSPICIOUS_CATEGORIES = ["SERVICES", "OTHER"];
 let FinanceService = FinanceService_1 = class FinanceService {
     prisma;
+    redis;
+    realtimeGateway;
     alertQueue;
     logger = new common_1.Logger(FinanceService_1.name);
-    constructor(prisma, alertQueue) {
+    constructor(prisma, redis, realtimeGateway, alertQueue) {
         this.prisma = prisma;
+        this.redis = redis;
+        this.realtimeGateway = realtimeGateway;
         this.alertQueue = alertQueue;
     }
     async openCashbox(userId, dto) {
@@ -468,12 +475,66 @@ let FinanceService = FinanceService_1 = class FinanceService {
             },
         });
     }
+    async generatePaymentQR(workOrderId, userId) {
+        const order = await this.prisma.workOrder.findUnique({
+            where: { id: workOrderId },
+            include: { client: { select: { firstName: true, lastName: true } } },
+        });
+        if (!order)
+            throw new common_1.NotFoundException("Orden no encontrada");
+        if (order.paymentStatus === "PAID")
+            throw new common_1.ConflictException("Esta orden ya esta pagada");
+        const qrToken = crypto.randomUUID();
+        const expiresAt = new Date(Date.now() + 7 * 60 * 1000);
+        const amount = Number(order.finalAmount || order.totalCost || 0);
+        await this.redis.set(`qr:payment:${qrToken}`, JSON.stringify({
+            workOrderId, amount, orderId: order.number, createdBy: userId,
+        }), 420);
+        await this.prisma.auditLog.create({
+            data: {
+                userId, userName: "system", role: "FINANCE",
+                action: "PAYMENT_QR_GENERATED", entity: "WorkOrder",
+                entityId: workOrderId, severity: "INFO",
+                ipAddress: "system",
+                metadata: { qrToken, amount, expiresAt },
+            },
+        });
+        return {
+            qrToken, amount, orderId: order.number, expiresAt,
+            message: "QR valido por 7 minutos. No compartir Yape personal.",
+        };
+    }
+    async confirmPaymentWebhook(qrToken, paymentMethod, reference) {
+        const processed = await this.redis.get(`payment:processed:${qrToken}`);
+        if (processed)
+            return { status: "already_processed" };
+        const qrData = await this.redis.get(`qr:payment:${qrToken}`);
+        if (!qrData)
+            throw new common_1.BadRequestException("QR expirado o invalido");
+        const { workOrderId, amount } = JSON.parse(qrData);
+        await this.redis.set(`payment:processed:${qrToken}`, "processed", 86400);
+        const payment = await this.prisma.payment.create({
+            data: {
+                workOrderId, method: paymentMethod || "YAPE", amount,
+                reference: reference || qrToken, isPersonalYape: false,
+                receivedBy: "system",
+                paidAt: new Date(),
+            },
+        });
+        await this.redis.del(`qr:payment:${qrToken}`);
+        this.realtimeGateway?.emitPaymentReceived({
+            workOrderId, amount, method: paymentMethod || "YAPE", receivedBy: "system", isAlert: false,
+        });
+        return { status: "confirmed", payment };
+    }
 };
 exports.FinanceService = FinanceService;
 exports.FinanceService = FinanceService = FinanceService_1 = __decorate([
     (0, common_1.Injectable)(),
-    __param(1, (0, bullmq_1.InjectQueue)(queue_names_enum_1.QueueName.ALERT_DISPATCHER)),
+    __param(3, (0, bullmq_1.InjectQueue)(queue_names_enum_1.QueueName.ALERT_DISPATCHER)),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+        redis_service_1.RedisService,
+        realtime_gateway_1.RealtimeGateway,
         bullmq_2.Queue])
 ], FinanceService);
 //# sourceMappingURL=finance.service.js.map

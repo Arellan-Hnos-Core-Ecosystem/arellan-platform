@@ -1,6 +1,7 @@
 import {
   IsNumber, IsString, IsEnum, IsOptional, IsUrl, IsIn, Min, Max, MinLength, MaxLength, ValidateIf, IsPositive,
 } from "class-validator"
+import { Type } from "class-transformer"
 import { TransactionType, PaymentMethod, ExpenseCategory, Currency } from "@prisma/client"
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger"
 
@@ -116,12 +117,14 @@ export class ExpenseFiltersDto {
 
   @ApiPropertyOptional({ description: "Numero de pagina (min 1)", example: 1, minimum: 1, default: 1 })
   @IsOptional()
+  @Type(() => Number)
   @IsNumber({}, { message: "page debe ser numero" })
   @Min(1)
   page?: number = 1
 
   @ApiPropertyOptional({ description: "Resultados por pagina (1-100)", example: 20, minimum: 1, maximum: 100, default: 20 })
   @IsOptional()
+  @Type(() => Number)
   @IsNumber({}, { message: "size debe ser numero" })
   @Min(1)
   @Max(100)

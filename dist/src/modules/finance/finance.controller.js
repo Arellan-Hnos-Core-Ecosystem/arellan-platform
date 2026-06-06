@@ -61,6 +61,9 @@ let FinanceController = class FinanceController {
     getCashboxHistory(limit, cursor) {
         return this.financeService.getCashboxHistory(limit, cursor);
     }
+    async generatePaymentQR(user, body) {
+        return this.financeService.generatePaymentQR(body.workOrderId, user.id);
+    }
 };
 exports.FinanceController = FinanceController;
 __decorate([
@@ -245,6 +248,18 @@ __decorate([
     __metadata("design:paramtypes", [Number, String]),
     __metadata("design:returntype", void 0)
 ], FinanceController.prototype, "getCashboxHistory", null);
+__decorate([
+    (0, common_1.Post)("qr/generate"),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN, client_1.UserRole.OWNER, client_1.UserRole.FINANCE),
+    (0, swagger_1.ApiBearerAuth)("access-token"),
+    (0, swagger_1.ApiOperation)({ summary: "Generar QR dinamico de cobro", description: "Genera QR de pago para una OT con expiracion de 7 minutos." }),
+    __param(0, (0, current_user_decorator_1.CurrentUser)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", Promise)
+], FinanceController.prototype, "generatePaymentQR", null);
 exports.FinanceController = FinanceController = __decorate([
     (0, swagger_1.ApiTags)("Finance"),
     (0, common_1.Controller)("finance"),

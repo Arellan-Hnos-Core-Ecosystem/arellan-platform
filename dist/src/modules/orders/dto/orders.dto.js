@@ -158,6 +158,7 @@ __decorate([
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({ description: "Cantidad de resultados por pagina (1-100)", example: 20, minimum: 1, maximum: 100, default: 20 }),
     (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
     (0, class_validator_1.IsNumber)(),
     (0, class_validator_1.Min)(1, { message: "Limite minimo es 1" }),
     (0, class_validator_1.Max)(100, { message: "Limite maximo es 100" }),

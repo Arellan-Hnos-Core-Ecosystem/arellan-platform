@@ -1,4 +1,5 @@
-import { Controller, Post, Get, Delete, Body, Param, Req, UseGuards, HttpCode } from "@nestjs/common"
+import { Controller, Post, Get, Delete, Body, Param, Req, Res, UseGuards, HttpCode } from "@nestjs/common"
+import { Response } from "express"
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam, ApiBody } from "@nestjs/swagger"
 import { AuthService, AuthUser } from "./auth.service"
 import { LoginDto, MfaVerifyDto, RegisterDto, ChangePasswordDto, ForceLogoutDto, MechanicLoginDto } from "./dto/auth.dto"
@@ -23,10 +24,21 @@ export class AuthController {
   @ApiResponse({ status: 202, description: "MFA pendiente - retorna sessionToken para verifyMfa" })
   @ApiResponse({ status: 401, description: "Credenciales invalidas o cuenta inactiva" })
   @ApiResponse({ status: 429, description: "Cuenta bloqueada por multiples intentos fallidos" })
-  login(@Body() dto: LoginDto, @Req() req: any) {
+  async login(@Body() dto: LoginDto, @Req() req: any, @Res({ passthrough: true }) res: Response) {
     const ip = req.ip || req.socket?.remoteAddress || "unknown"
     const userAgent = req.headers?.["user-agent"]
-    return this.authService.login(dto, ip, userAgent)
+    const result = await this.authService.login(dto, ip, userAgent)
+
+    if (!(result as any).mfaPending) {
+      res.cookie("arellan-auth", "true", {
+        httpOnly: false,
+        secure: false,
+        sameSite: "lax",
+        path: "/",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      })
+    }
+    return result
   }
 
   @Post("mechanic/login")
@@ -37,10 +49,18 @@ export class AuthController {
   @ApiBody({ type: MechanicLoginDto, description: "PIN de 6 digitos" })
   @ApiResponse({ status: 200, description: "Login exitoso - retorna accessToken, refreshToken y datos del mecanico" })
   @ApiResponse({ status: 401, description: "PIN invalido, cuenta inactiva o rol no autorizado para tablet" })
-  mechanicLogin(@Body() dto: MechanicLoginDto, @Req() req: any) {
+  async mechanicLogin(@Body() dto: MechanicLoginDto, @Req() req: any, @Res({ passthrough: true }) res: Response) {
     const ip = req.ip || req.socket?.remoteAddress || "unknown"
     const userAgent = req.headers?.["user-agent"]
-    return this.authService.mechanicLogin(dto.pin, ip, userAgent)
+    const result = await this.authService.mechanicLogin(dto.pin, ip, userAgent)
+    res.cookie("arellan-auth", "true", {
+      httpOnly: false,
+      secure: false,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    })
+    return result
   }
 
   @Post("mfa/verify")
@@ -51,8 +71,16 @@ export class AuthController {
   @ApiBody({ type: MfaVerifyDto, description: "Token TOTP y sessionToken" })
   @ApiResponse({ status: 200, description: "MFA verificado - retorna accessToken, refreshToken y datos del usuario" })
   @ApiResponse({ status: 401, description: "Codigo TOTP invalido o sesion expirada" })
-  verifyMfa(@Body() dto: MfaVerifyDto) {
-    return this.authService.verifyMfa(dto)
+  async verifyMfa(@Body() dto: MfaVerifyDto, @Res({ passthrough: true }) res: Response) {
+    const result = await this.authService.verifyMfa(dto)
+    res.cookie("arellan-auth", "true", {
+      httpOnly: false,
+      secure: false,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    })
+    return result
   }
 
   @Post("register")

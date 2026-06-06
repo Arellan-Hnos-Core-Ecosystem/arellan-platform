@@ -1,9 +1,10 @@
+import { Response } from "express";
 import { AuthService, AuthUser } from "./auth.service";
 import { LoginDto, MfaVerifyDto, RegisterDto, ChangePasswordDto, ForceLogoutDto, MechanicLoginDto } from "./dto/auth.dto";
 export declare class AuthController {
     private readonly authService;
     constructor(authService: AuthService);
-    login(dto: LoginDto, req: any): Promise<{
+    login(dto: LoginDto, req: any, res: Response): Promise<{
         accessToken: string;
         refreshToken: string;
         user: {
@@ -18,7 +19,7 @@ export declare class AuthController {
         sessionToken: string;
         message: string;
     }>;
-    mechanicLogin(dto: MechanicLoginDto, req: any): Promise<{
+    mechanicLogin(dto: MechanicLoginDto, req: any, res: Response): Promise<{
         accessToken: string;
         refreshToken: string;
         user: {
@@ -29,7 +30,7 @@ export declare class AuthController {
             mfaEnabled: boolean;
         };
     }>;
-    verifyMfa(dto: MfaVerifyDto): Promise<{
+    verifyMfa(dto: MfaVerifyDto, res: Response): Promise<{
         accessToken: string;
         refreshToken: string;
         user: {

@@ -1,10 +1,12 @@
 import { Module } from "@nestjs/common"
 import { FinanceController } from "./finance.controller"
+import { AlertsController } from "./alerts.controller"
+import { PaymentWebhookController } from "./payment-webhook.controller"
 import { FinanceService } from "./finance.service"
 import { CacheManagerService } from "../../common/cache/cache-manager.service"
 
 @Module({
-  controllers: [FinanceController],
+  controllers: [FinanceController, AlertsController, PaymentWebhookController],
   providers: [
     FinanceService,
     {
