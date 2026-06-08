@@ -1,8 +1,10 @@
 import { Injectable, NotFoundException, ConflictException, Logger, BadRequestException } from "@nestjs/common"
+import { createHash } from "crypto"
 import { PrismaService } from "../../common/prisma/prisma.service"
 import { OrderStatus, Prisma, PaymentMethod, UserRole, ApprovalType, ApprovalStatus } from "@prisma/client"
-import { CreateOrderDto, UpdateOrderDto, UpdateStatusDto, OrderFilterDto, PaginatedResult, ApplyDiscountDto, RequestPartsDto, MechanicProgressDto } from "./dto/orders.dto"
+import { CreateOrderDto, UpdateOrderDto, UpdateStatusDto, OrderFilterDto, PaginatedResult, ApplyDiscountDto, RequestPartsDto, MechanicProgressDto, VehicleCheckinDto } from "./dto/orders.dto"
 import { RealtimeGateway } from "../../common/gateway/realtime.gateway"
+import { WorkOrder } from "../../domain/work-orders/entities/work-order.entity"
 
 const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   RECEIVED: [OrderStatus.IN_DIAGNOSIS, OrderStatus.CANCELLED],
@@ -147,6 +149,15 @@ export class OrdersService {
         `No se puede cambiar de ${order.status} a ${dto.status}. ` +
         `Transiciones permitidas: ${allowed.length ? allowed.join(", ") : "ninguna"}`
       )
+    }
+
+    if (dto.status === OrderStatus.IN_PROGRESS) {
+      const partsCount = await this.prisma.workOrderPart.count({ where: { orderId: id } })
+      if (partsCount === 0) {
+        throw new BadRequestException(
+          "Regla Anti-Fraude AF-01: La OT debe tener repuestos solicitados antes de iniciar trabajo (IN_PROGRESS)",
+        )
+      }
     }
 
     if (dto.status === OrderStatus.DELIVERED) {
@@ -434,7 +445,7 @@ export class OrdersService {
     if (!order) throw new NotFoundException("Orden de trabajo no encontrada")
 
     const url = `data:${photo.mimetype};base64,${photo.buffer.toString("base64")}`
-    const hash = require("crypto").createHash("md5").update(photo.buffer).digest("hex")
+    const hash = createHash("sha256").update(photo.buffer).digest("hex")
 
     await this.prisma.workOrderPhoto.create({
       data: {
@@ -591,94 +602,134 @@ export class OrdersService {
   }
 
   async vehicleCheckin(
-    body: { plate: string; brand: string; model: string; kilometerReading?: string; fuelLevel?: string; description?: string; photoPositions?: string },
+    body: VehicleCheckinDto,
     photos: Express.Multer.File[],
     userId: string,
     userName: string,
   ) {
     const plateNormalized = body.plate.toUpperCase().trim()
 
-    let vehicle = await this.prisma.vehicle.findFirst({
+    // Anti-Fraud Rule #8 — delegated to domain invariant
+    if (photos.length < WorkOrder.REQUIRED_CHECKIN_POSITIONS.length) {
+      throw new BadRequestException(
+        `Regla Anti-Fraude #8: Se requieren ${WorkOrder.REQUIRED_CHECKIN_POSITIONS.length} fotos obligatorias ` +
+        `(${WorkOrder.REQUIRED_CHECKIN_POSITIONS.join(", ")}). Recibidas: ${photos.length}`,
+      )
+    }
+
+    const suppliedPositions = (body.photoPositions ?? "")
+      .split(",")
+      .map((p) => p.trim().toUpperCase())
+      .filter(Boolean)
+
+    try {
+      WorkOrder.assertCheckinPhotoPositions(suppliedPositions)
+    } catch (e) {
+      throw new BadRequestException((e as Error).message)
+    }
+
+    // Pre-transaction conflict check (read-only, safe outside transaction)
+    const existingVehicle = await this.prisma.vehicle.findFirst({
       where: { plate: { equals: plateNormalized, mode: "insensitive" } },
     })
 
-    if (vehicle) {
+    if (existingVehicle) {
       const activeOrder = await this.prisma.workOrder.findFirst({
         where: {
-          vehicleId: vehicle.id,
+          vehicleId: existingVehicle.id,
           status: { notIn: ["DELIVERED", "CANCELLED"] },
         },
       })
       if (activeOrder) {
-        throw new ConflictException(`Ya existe una OT activa (${activeOrder.number}) para la placa ${plateNormalized}`)
+        throw new ConflictException(
+          `Ya existe una OT activa (${activeOrder.number}) para la placa ${plateNormalized}`,
+        )
       }
     }
 
-    if (!vehicle) {
-      let defaultClient = await this.prisma.client.findFirst({
-        where: { email: "sinasignar@arellanhnos.com" },
-      })
-      if (!defaultClient) {
-        defaultClient = await this.prisma.client.create({
+    // Atomic transaction: vehicle lookup/creation + WO + SHA-256 photo hashes + event
+    const { order, vehicle } = await this.prisma.$transaction(async (tx) => {
+      let vehicle = existingVehicle
+
+      if (!vehicle) {
+        let defaultClient = await tx.client.findFirst({
+          where: { email: "sinasignar@arellanhnos.com" },
+        })
+        if (!defaultClient) {
+          defaultClient = await tx.client.create({
+            data: {
+              firstName: "Cliente",
+              lastName: "Sin Asignar",
+              email: "sinasignar@arellanhnos.com",
+              dni: "00000000",
+              phone: "000000000",
+            },
+          })
+        }
+
+        vehicle = await tx.vehicle.create({
           data: {
-            firstName: "Cliente",
-            lastName: "Sin Asignar",
-            email: "sinasignar@arellanhnos.com",
-            dni: "00000000",
-            phone: "000000000",
+            plate: plateNormalized,
+            brand: body.brand || "No especificado",
+            model: body.model || "No especificado",
+            year: new Date().getFullYear(),
+            color: "No especificado",
+            clientId: defaultClient.id,
           },
         })
       }
 
-      vehicle = await this.prisma.vehicle.create({
+      const year = new Date().getFullYear()
+      const count = await tx.workOrder.count({
+        where: { number: { startsWith: `OT-${year}-` } },
+      })
+      const number = `OT-${year}-${String(count + 1).padStart(4, "0")}`
+
+      const order = await tx.workOrder.create({
         data: {
-          plate: plateNormalized,
-          brand: body.brand || "No especificado",
-          model: body.model || "No especificado",
-          year: new Date().getFullYear(),
-          color: "No especificado",
-          clientId: defaultClient.id,
+          number,
+          vehicleId: vehicle.id,
+          clientId: vehicle.clientId,
+          mechanicId: userId,
+          description: body.description || `Ingreso de vehículo ${plateNormalized}`,
+          createdBy: userId,
+        },
+        include: ORDER_INCLUDE,
+      })
+
+      const photoUrls: string[] = []
+      for (let i = 0; i < photos.length; i++) {
+        const photo = photos[i]
+        const url = `data:${photo.mimetype};base64,${photo.buffer.toString("base64")}`
+        const hash = createHash("sha256").update(photo.buffer).digest("hex")
+        await tx.workOrderPhoto.create({
+          data: { orderId: order.id, url, type: photo.mimetype, hash },
+        })
+        photoUrls.push(url)
+      }
+
+      await tx.workOrder.update({
+        where: { id: order.id },
+        data: { photos: photoUrls },
+      })
+
+      await tx.workOrderEvent.create({
+        data: {
+          workOrderId: order.id,
+          event: "VEHICLE_INTAKE",
+          description: `${userName} ingresó el vehículo ${plateNormalized} al taller`,
+          metadata: {
+            plate: plateNormalized,
+            kilometerReading: body.kilometerReading ?? null,
+            fuelLevel: body.fuelLevel ?? null,
+            photoCount: photos.length,
+            photoPositions: suppliedPositions,
+          },
+          userId,
         },
       })
-    }
 
-    const year = new Date().getFullYear()
-    const count = await this.prisma.workOrder.count({
-      where: { number: { startsWith: `OT-${year}-` } },
-    })
-    const number = `OT-${year}-${String(count + 1).padStart(4, "0")}`
-
-    const order = await this.prisma.workOrder.create({
-      data: {
-        number,
-        vehicleId: vehicle.id,
-        clientId: vehicle.clientId,
-        mechanicId: userId,
-        description: body.description || `Ingreso de vehículo ${plateNormalized}`,
-        createdBy: userId,
-      },
-      include: ORDER_INCLUDE,
-    })
-
-    for (const photo of photos) {
-      const url = `data:${photo.mimetype};base64,${photo.buffer.toString("base64")}`
-      const hash = require("crypto").createHash("md5").update(photo.buffer).digest("hex")
-      await this.prisma.workOrderPhoto.create({
-        data: { orderId: order.id, url, type: photo.mimetype, hash },
-      })
-      await this.prisma.workOrder.update({
-        where: { id: order.id },
-        data: { photos: { push: url } },
-      })
-    }
-
-    await this.prisma.workOrderEvent.create({
-      data: {
-        workOrderId: order.id,
-        event: "VEHICLE_INTAKE",
-        description: `${userName} ingresó el vehículo ${plateNormalized} al taller`,
-        userId,
-      },
+      return { order, vehicle }
     })
 
     this.wsGateway.emitOrderCreated({

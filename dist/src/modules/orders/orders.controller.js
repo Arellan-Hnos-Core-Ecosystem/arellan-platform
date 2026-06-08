@@ -20,6 +20,7 @@ const orders_service_1 = require("./orders.service");
 const orders_dto_1 = require("./dto/orders.dto");
 const jwt_auth_guard_1 = require("../../common/guards/jwt-auth.guard");
 const roles_guard_1 = require("../../common/guards/roles.guard");
+const data_masking_interceptor_1 = require("../../common/interceptors/data-masking.interceptor");
 const roles_decorator_1 = require("../../common/decorators/roles.decorator");
 const current_user_decorator_1 = require("../../common/decorators/current-user.decorator");
 const client_1 = require("@prisma/client");
@@ -317,7 +318,7 @@ __decorate([
     (0, common_1.Post)("checkin"),
     (0, roles_decorator_1.Roles)(client_1.UserRole.MECHANIC, client_1.UserRole.TRAINEE, client_1.UserRole.ADMIN, client_1.UserRole.OWNER),
     (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
-    (0, common_1.UseInterceptors)((0, platform_express_1.FilesInterceptor)("photos", 10)),
+    (0, common_1.UseInterceptors)(data_masking_interceptor_1.DataMaskingInterceptor, (0, platform_express_1.FilesInterceptor)("photos", 10)),
     (0, swagger_1.ApiOperation)({
         summary: "Ingreso rapido de vehiculo al taller",
         description: "Crea o encuentra un vehiculo por placa y genera una OT nueva. Recibe fotos multipart del vehiculo. Usado desde la tablet por el mecanico al recibir un auto.",
@@ -339,7 +340,7 @@ __decorate([
     __param(1, (0, common_1.UploadedFiles)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Array, Object]),
+    __metadata("design:paramtypes", [orders_dto_1.VehicleCheckinDto, Array, Object]),
     __metadata("design:returntype", Promise)
 ], OrdersController.prototype, "vehicleCheckin", null);
 exports.OrdersController = OrdersController = __decorate([

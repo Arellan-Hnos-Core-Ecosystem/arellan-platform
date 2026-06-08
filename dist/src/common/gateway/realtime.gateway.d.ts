@@ -100,6 +100,13 @@ export declare class RealtimeGateway implements OnGatewayInit, OnGatewayConnecti
         severity: string;
         userId?: string;
     }): void;
+    emitAnomalyDetected(data: {
+        type: string;
+        description: string;
+        severity: string;
+        sessionId?: string;
+        userId?: string;
+    }): void;
     handleStatusChange(_client: Socket, data: OrderUpdatePayload): {
         success: boolean;
         eventId: string;

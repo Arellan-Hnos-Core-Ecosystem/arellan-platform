@@ -42,6 +42,15 @@ export declare class RequestPartsItemDto {
 export declare class RequestPartsDto {
     items: RequestPartsItemDto[];
 }
+export declare class VehicleCheckinDto {
+    plate: string;
+    brand?: string;
+    model?: string;
+    kilometerReading?: string;
+    fuelLevel?: string;
+    description?: string;
+    photoPositions?: string;
+}
 export declare class MechanicProgressDto {
     progressPercent: number;
     partsInstalled: number;

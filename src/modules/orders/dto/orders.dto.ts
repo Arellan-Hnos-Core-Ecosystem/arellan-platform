@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum, IsNumber, IsDateString, IsUUID, Min, Max, IsArray, ValidateNested } from "class-validator"
+import { IsString, IsOptional, IsEnum, IsNumber, IsDateString, IsUUID, Min, Max, IsArray, ValidateNested, Matches } from "class-validator"
 import { Type } from "class-transformer"
 import { OrderStatus } from "@prisma/client"
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger"
@@ -136,6 +136,43 @@ export class RequestPartsDto {
   @ValidateNested({ each: true })
   @Type(() => RequestPartsItemDto)
   items: RequestPartsItemDto[]
+}
+
+export class VehicleCheckinDto {
+  @ApiProperty({ description: "Placa del vehiculo (formato peruano ABC-123)", example: "ABC-123" })
+  @IsString()
+  @Matches(/^[A-Z]{3}-\d{3}$/i, { message: "Placa invalida. Formato requerido: ABC-123" })
+  plate: string
+
+  @ApiPropertyOptional({ description: "Marca del vehiculo", example: "Toyota" })
+  @IsOptional()
+  @IsString()
+  brand?: string
+
+  @ApiPropertyOptional({ description: "Modelo del vehiculo", example: "Hiace" })
+  @IsOptional()
+  @IsString()
+  model?: string
+
+  @ApiPropertyOptional({ description: "Lectura actual del kilometraje", example: "85000" })
+  @IsOptional()
+  @IsString()
+  kilometerReading?: string
+
+  @ApiPropertyOptional({ description: "Nivel de combustible", enum: ["EMPTY", "QUARTER", "HALF", "THREE_QUARTERS", "FULL"] })
+  @IsOptional()
+  @IsString()
+  fuelLevel?: string
+
+  @ApiPropertyOptional({ description: "Descripcion del trabajo a realizar", example: "Cambio de aceite y filtros" })
+  @IsOptional()
+  @IsString()
+  description?: string
+
+  @ApiPropertyOptional({ description: "Posiciones de fotos separadas por coma (FRONT,BACK,LEFT,RIGHT,DASHBOARD)", example: "FRONT,BACK,LEFT,RIGHT,DASHBOARD" })
+  @IsOptional()
+  @IsString()
+  photoPositions?: string
 }
 
 export class MechanicProgressDto {

@@ -142,7 +142,7 @@ let FinanceService = FinanceService_1 = class FinanceService {
         const approvalLevel = this.determineApprovalLevel(dto.amount);
         const status = Number(dto.amount) < 100
             ? client_1.ExpenseStatus.DISBURSED
-            : "PENDING_APPROVAL";
+            : client_1.ExpenseStatus.PENDING_APPROVAL;
         const expense = await this.prisma.expenseAuthorization.create({
             data: {
                 requesterId,
@@ -196,7 +196,7 @@ let FinanceService = FinanceService_1 = class FinanceService {
         const expense = await this.prisma.expenseAuthorization.findUnique({ where: { id: expenseId } });
         if (!expense)
             throw new common_1.NotFoundException("Gasto no encontrado");
-        if (expense.status !== "PENDING_APPROVAL")
+        if (expense.status !== client_1.ExpenseStatus.PENDING_APPROVAL)
             throw new common_1.ConflictException("El gasto ya fue procesado");
         if (expense.requesterId === approverId) {
             throw new common_1.ForbiddenException({ message: "No puedes aprobar tus propios gastos", code: "SELF_APPROVAL_FORBIDDEN" });
@@ -243,7 +243,7 @@ let FinanceService = FinanceService_1 = class FinanceService {
         return approved;
     }
     async getPendingExpenses(approverId) {
-        const where = { status: "PENDING_APPROVAL" };
+        const where = { status: client_1.ExpenseStatus.PENDING_APPROVAL };
         if (approverId)
             where.requesterId = { not: approverId };
         return this.prisma.expenseAuthorization.findMany({
@@ -367,7 +367,7 @@ let FinanceService = FinanceService_1 = class FinanceService {
             this.prisma.workOrder.count({
                 where: { status: { in: ["IN_DIAGNOSIS", "IN_PROGRESS", "IN_REVIEW", "BUDGETED"] } },
             }),
-            this.prisma.expenseAuthorization.count({ where: { status: "PENDING_APPROVAL" } }),
+            this.prisma.expenseAuthorization.count({ where: { status: client_1.ExpenseStatus.PENDING_APPROVAL } }),
         ]);
         const totalRevenue = Number(payments._sum.amount ?? 0);
         const totalExpenses = Number(expenses._sum.amount ?? 0);
@@ -416,7 +416,7 @@ let FinanceService = FinanceService_1 = class FinanceService {
         const expense = await this.prisma.expenseAuthorization.findUnique({ where: { id: expenseId } });
         if (!expense)
             throw new common_1.NotFoundException("Gasto no encontrado");
-        if (expense.status !== "PENDING_APPROVAL")
+        if (expense.status !== client_1.ExpenseStatus.PENDING_APPROVAL)
             throw new common_1.ConflictException("El gasto ya fue procesado");
         if (expense.requesterId === approverId) {
             throw new common_1.ForbiddenException({ message: "No puedes aprobar tus propios gastos", code: "SELF_APPROVAL_FORBIDDEN" });

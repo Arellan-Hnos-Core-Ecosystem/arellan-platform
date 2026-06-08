@@ -244,6 +244,16 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     this.server.to("dashboard").emit("alert:security", data)
   }
 
+  emitAnomalyDetected(data: {
+    type: string
+    description: string
+    severity: string
+    sessionId?: string
+    userId?: string
+  }) {
+    this.server.to("dashboard").emit("anomaly:detected", data)
+  }
+
   // ─── SUBSCRIBE MESSAGE HANDLERS ────────────────────────
 
   @SubscribeMessage("order:status-changed")

@@ -15,6 +15,7 @@ const cashbox_report_worker_1 = require("./cashbox-report.worker");
 const audit_anomaly_worker_1 = require("./audit-anomaly.worker");
 const backup_worker_1 = require("./backup.worker");
 const monthly_discrepancy_worker_1 = require("./monthly-discrepancy.worker");
+const alert_dispatcher_processor_1 = require("./alert-dispatcher.processor");
 const prisma_module_1 = require("../common/prisma/prisma.module");
 let WorkersModule = class WorkersModule {
 };
@@ -29,6 +30,7 @@ exports.WorkersModule = WorkersModule = __decorate([
             audit_anomaly_worker_1.AuditAnomalyWorker,
             backup_worker_1.BackupWorker,
             monthly_discrepancy_worker_1.MonthlyDiscrepancyWorker,
+            alert_dispatcher_processor_1.AlertDispatcherProcessor,
         ],
         exports: [schedule_1.ScheduleModule],
     })

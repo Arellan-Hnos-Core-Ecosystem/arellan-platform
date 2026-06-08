@@ -3,9 +3,10 @@ import { FileInterceptor, FilesInterceptor } from "@nestjs/platform-express"
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam, ApiConsumes, ApiBody } from "@nestjs/swagger"
 import { OrdersService } from "./orders.service"
 import { AuthUser } from "../auth/auth.service"
-import { CreateOrderDto, UpdateOrderDto, UpdateStatusDto, OrderFilterDto, ApplyDiscountDto, RequestPartsDto, MechanicProgressDto } from "./dto/orders.dto"
+import { CreateOrderDto, UpdateOrderDto, UpdateStatusDto, OrderFilterDto, ApplyDiscountDto, RequestPartsDto, MechanicProgressDto, VehicleCheckinDto } from "./dto/orders.dto"
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard"
 import { RolesGuard } from "../../common/guards/roles.guard"
+import { DataMaskingInterceptor } from "../../common/interceptors/data-masking.interceptor"
 import { Roles } from "../../common/decorators/roles.decorator"
 import { CurrentUser } from "../../common/decorators/current-user.decorator"
 import { UserRole, OrderStatus } from "@prisma/client"
@@ -216,7 +217,7 @@ export class OrdersController {
   @Post("checkin")
   @Roles(UserRole.MECHANIC, UserRole.TRAINEE, UserRole.ADMIN, UserRole.OWNER)
   @UseGuards(RolesGuard)
-  @UseInterceptors(FilesInterceptor("photos", 10))
+  @UseInterceptors(DataMaskingInterceptor, FilesInterceptor("photos", 10))
   @ApiOperation({
     summary: "Ingreso rapido de vehiculo al taller",
     description: "Crea o encuentra un vehiculo por placa y genera una OT nueva. Recibe fotos multipart del vehiculo. Usado desde la tablet por el mecanico al recibir un auto.",
@@ -235,7 +236,7 @@ export class OrdersController {
   @ApiResponse({ status: 201, description: "Vehiculo ingresado y OT creada" })
   @ApiResponse({ status: 409, description: "Ya existe una OT activa para esa placa" })
   async vehicleCheckin(
-    @Body() body: { plate: string; brand: string; model: string; kilometerReading?: string; fuelLevel?: string; description?: string; photoPositions?: string },
+    @Body() body: VehicleCheckinDto,
     @UploadedFiles() photos?: Express.Multer.File[],
     @CurrentUser() user?: AuthUser,
   ) {

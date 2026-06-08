@@ -9,7 +9,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.MechanicProgressDto = exports.RequestPartsDto = exports.RequestPartsItemDto = exports.OrderFilterDto = exports.ApplyDiscountDto = exports.AssignMechanicDto = exports.UpdateStatusDto = exports.UpdateOrderDto = exports.CreateOrderDto = void 0;
+exports.MechanicProgressDto = exports.VehicleCheckinDto = exports.RequestPartsDto = exports.RequestPartsItemDto = exports.OrderFilterDto = exports.ApplyDiscountDto = exports.AssignMechanicDto = exports.UpdateStatusDto = exports.UpdateOrderDto = exports.CreateOrderDto = void 0;
 const class_validator_1 = require("class-validator");
 const class_transformer_1 = require("class-transformer");
 const client_1 = require("@prisma/client");
@@ -198,6 +198,58 @@ __decorate([
     (0, class_transformer_1.Type)(() => RequestPartsItemDto),
     __metadata("design:type", Array)
 ], RequestPartsDto.prototype, "items", void 0);
+class VehicleCheckinDto {
+    plate;
+    brand;
+    model;
+    kilometerReading;
+    fuelLevel;
+    description;
+    photoPositions;
+}
+exports.VehicleCheckinDto = VehicleCheckinDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({ description: "Placa del vehiculo (formato peruano ABC-123)", example: "ABC-123" }),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Matches)(/^[A-Z]{3}-\d{3}$/i, { message: "Placa invalida. Formato requerido: ABC-123" }),
+    __metadata("design:type", String)
+], VehicleCheckinDto.prototype, "plate", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ description: "Marca del vehiculo", example: "Toyota" }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], VehicleCheckinDto.prototype, "brand", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ description: "Modelo del vehiculo", example: "Hiace" }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], VehicleCheckinDto.prototype, "model", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ description: "Lectura actual del kilometraje", example: "85000" }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], VehicleCheckinDto.prototype, "kilometerReading", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ description: "Nivel de combustible", enum: ["EMPTY", "QUARTER", "HALF", "THREE_QUARTERS", "FULL"] }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], VehicleCheckinDto.prototype, "fuelLevel", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ description: "Descripcion del trabajo a realizar", example: "Cambio de aceite y filtros" }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], VehicleCheckinDto.prototype, "description", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ description: "Posiciones de fotos separadas por coma (FRONT,BACK,LEFT,RIGHT,DASHBOARD)", example: "FRONT,BACK,LEFT,RIGHT,DASHBOARD" }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], VehicleCheckinDto.prototype, "photoPositions", void 0);
 class MechanicProgressDto {
     progressPercent;
     partsInstalled;

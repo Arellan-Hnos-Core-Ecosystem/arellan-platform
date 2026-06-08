@@ -12,7 +12,7 @@ Backend unificado (API REST) de la Clínica Automotriz Arellan Hnos. Concentra t
 |------|-----------|
 | Runtime | Node.js 20 LTS |
 | Framework | NestJS + TypeScript (strict) |
-| ORM | Prisma 5.x |
+| ORM | Prisma 6.x |
 | Base de datos | PostgreSQL 15 (Supabase MVP → AWS RDS producción) |
 | Caché / Colas | Redis + BullMQ (Upstash MVP → ElastiCache producción) |
 | Autenticación | Supabase Auth (MVP) → JWT RS256 + Passport (producción) |

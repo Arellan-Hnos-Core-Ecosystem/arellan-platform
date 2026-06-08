@@ -12,12 +12,12 @@ export declare class FinanceController {
         };
     } & {
         id: string;
-        status: import(".prisma/client").$Enums.CashboxStatus;
-        notes: string | null;
         openingBalance: import("@prisma/client/runtime/library").Decimal;
         closingBalance: import("@prisma/client/runtime/library").Decimal | null;
         actualCash: import("@prisma/client/runtime/library").Decimal | null;
         discrepancy: import("@prisma/client/runtime/library").Decimal | null;
+        status: import(".prisma/client").$Enums.CashboxStatus;
+        notes: string | null;
         openedAt: Date;
         closedAt: Date | null;
         openedById: string;
@@ -27,14 +27,14 @@ export declare class FinanceController {
         transactions: {
             id: string;
             createdAt: Date;
-            description: string | null;
+            sessionId: string;
             type: import(".prisma/client").$Enums.TransactionType;
             amount: import("@prisma/client/runtime/library").Decimal;
+            paymentMethod: import(".prisma/client").$Enums.PaymentMethod;
+            referenceToken: string | null;
             integrityHash: string | null;
             orderId: string | null;
-            paymentMethod: import(".prisma/client").$Enums.PaymentMethod;
-            sessionId: string;
-            referenceToken: string | null;
+            description: string | null;
             isAudited: boolean;
         }[];
         closedBy: {
@@ -44,12 +44,12 @@ export declare class FinanceController {
         } | null;
     } & {
         id: string;
-        status: import(".prisma/client").$Enums.CashboxStatus;
-        notes: string | null;
         openingBalance: import("@prisma/client/runtime/library").Decimal;
         closingBalance: import("@prisma/client/runtime/library").Decimal | null;
         actualCash: import("@prisma/client/runtime/library").Decimal | null;
         discrepancy: import("@prisma/client/runtime/library").Decimal | null;
+        status: import(".prisma/client").$Enums.CashboxStatus;
+        notes: string | null;
         openedAt: Date;
         closedAt: Date | null;
         openedById: string;
@@ -65,14 +65,14 @@ export declare class FinanceController {
             transactions: {
                 id: string;
                 createdAt: Date;
-                description: string | null;
+                sessionId: string;
                 type: import(".prisma/client").$Enums.TransactionType;
                 amount: import("@prisma/client/runtime/library").Decimal;
+                paymentMethod: import(".prisma/client").$Enums.PaymentMethod;
+                referenceToken: string | null;
                 integrityHash: string | null;
                 orderId: string | null;
-                paymentMethod: import(".prisma/client").$Enums.PaymentMethod;
-                sessionId: string;
-                referenceToken: string | null;
+                description: string | null;
                 isAudited: boolean;
             }[];
             openedBy: {
@@ -82,12 +82,12 @@ export declare class FinanceController {
             };
         } & {
             id: string;
-            status: import(".prisma/client").$Enums.CashboxStatus;
-            notes: string | null;
             openingBalance: import("@prisma/client/runtime/library").Decimal;
             closingBalance: import("@prisma/client/runtime/library").Decimal | null;
             actualCash: import("@prisma/client/runtime/library").Decimal | null;
             discrepancy: import("@prisma/client/runtime/library").Decimal | null;
+            status: import(".prisma/client").$Enums.CashboxStatus;
+            notes: string | null;
             openedAt: Date;
             closedAt: Date | null;
             openedById: string;
@@ -98,14 +98,14 @@ export declare class FinanceController {
     addTransaction(dto: CreateTransactionDto, sessionId: string): Promise<{
         id: string;
         createdAt: Date;
-        description: string | null;
+        sessionId: string;
         type: import(".prisma/client").$Enums.TransactionType;
         amount: import("@prisma/client/runtime/library").Decimal;
+        paymentMethod: import(".prisma/client").$Enums.PaymentMethod;
+        referenceToken: string | null;
         integrityHash: string | null;
         orderId: string | null;
-        paymentMethod: import(".prisma/client").$Enums.PaymentMethod;
-        sessionId: string;
-        referenceToken: string | null;
+        description: string | null;
         isAudited: boolean;
     }>;
     createExpense(user: AuthUser, dto: CreateExpenseDto): Promise<{
@@ -118,17 +118,17 @@ export declare class FinanceController {
         id: string;
         status: import(".prisma/client").$Enums.ExpenseStatus;
         createdAt: Date;
-        description: string;
-        category: import(".prisma/client").$Enums.ExpenseCategory;
-        requesterId: string;
-        approverId: string | null;
         amount: import("@prisma/client/runtime/library").Decimal;
+        description: string;
         currency: import(".prisma/client").$Enums.Currency;
+        category: import(".prisma/client").$Enums.ExpenseCategory;
         invoiceUrl: string | null;
         approvalLevel: import(".prisma/client").$Enums.ApprovalLevel;
         rejectionReason: string | null;
         approvedAt: Date | null;
         disbursedAt: Date | null;
+        requesterId: string;
+        approverId: string | null;
     }>;
     getPendingExpenses(user: AuthUser): Promise<({
         requester: {
@@ -140,17 +140,17 @@ export declare class FinanceController {
         id: string;
         status: import(".prisma/client").$Enums.ExpenseStatus;
         createdAt: Date;
-        description: string;
-        category: import(".prisma/client").$Enums.ExpenseCategory;
-        requesterId: string;
-        approverId: string | null;
         amount: import("@prisma/client/runtime/library").Decimal;
+        description: string;
         currency: import(".prisma/client").$Enums.Currency;
+        category: import(".prisma/client").$Enums.ExpenseCategory;
         invoiceUrl: string | null;
         approvalLevel: import(".prisma/client").$Enums.ApprovalLevel;
         rejectionReason: string | null;
         approvedAt: Date | null;
         disbursedAt: Date | null;
+        requesterId: string;
+        approverId: string | null;
     })[]>;
     approveExpense(id: string, user: AuthUser, dto: ApproveExpenseDto): Promise<{
         requester: {
@@ -167,17 +167,17 @@ export declare class FinanceController {
         id: string;
         status: import(".prisma/client").$Enums.ExpenseStatus;
         createdAt: Date;
-        description: string;
-        category: import(".prisma/client").$Enums.ExpenseCategory;
-        requesterId: string;
-        approverId: string | null;
         amount: import("@prisma/client/runtime/library").Decimal;
+        description: string;
         currency: import(".prisma/client").$Enums.Currency;
+        category: import(".prisma/client").$Enums.ExpenseCategory;
         invoiceUrl: string | null;
         approvalLevel: import(".prisma/client").$Enums.ApprovalLevel;
         rejectionReason: string | null;
         approvedAt: Date | null;
         disbursedAt: Date | null;
+        requesterId: string;
+        approverId: string | null;
     }>;
     getExpenses(filters: ExpenseFiltersDto): Promise<{
         data: ({
@@ -195,17 +195,17 @@ export declare class FinanceController {
             id: string;
             status: import(".prisma/client").$Enums.ExpenseStatus;
             createdAt: Date;
-            description: string;
-            category: import(".prisma/client").$Enums.ExpenseCategory;
-            requesterId: string;
-            approverId: string | null;
             amount: import("@prisma/client/runtime/library").Decimal;
+            description: string;
             currency: import(".prisma/client").$Enums.Currency;
+            category: import(".prisma/client").$Enums.ExpenseCategory;
             invoiceUrl: string | null;
             approvalLevel: import(".prisma/client").$Enums.ApprovalLevel;
             rejectionReason: string | null;
             approvedAt: Date | null;
             disbursedAt: Date | null;
+            requesterId: string;
+            approverId: string | null;
         })[];
         total: number;
         page: number;
@@ -213,7 +213,7 @@ export declare class FinanceController {
         totalPages: number;
     }>;
     getDashboard(period?: "day" | "week" | "month"): Promise<{
-        period: "week" | "day" | "month";
+        period: "day" | "week" | "month";
         from: Date;
         revenue: number;
         expenses: number;
@@ -242,14 +242,14 @@ export declare class FinanceController {
             transactions: {
                 id: string;
                 createdAt: Date;
-                description: string | null;
+                sessionId: string;
                 type: import(".prisma/client").$Enums.TransactionType;
                 amount: import("@prisma/client/runtime/library").Decimal;
+                paymentMethod: import(".prisma/client").$Enums.PaymentMethod;
+                referenceToken: string | null;
                 integrityHash: string | null;
                 orderId: string | null;
-                paymentMethod: import(".prisma/client").$Enums.PaymentMethod;
-                sessionId: string;
-                referenceToken: string | null;
+                description: string | null;
                 isAudited: boolean;
             }[];
             openedBy: {
@@ -264,12 +264,12 @@ export declare class FinanceController {
             } | null;
         } & {
             id: string;
-            status: import(".prisma/client").$Enums.CashboxStatus;
-            notes: string | null;
             openingBalance: import("@prisma/client/runtime/library").Decimal;
             closingBalance: import("@prisma/client/runtime/library").Decimal | null;
             actualCash: import("@prisma/client/runtime/library").Decimal | null;
             discrepancy: import("@prisma/client/runtime/library").Decimal | null;
+            status: import(".prisma/client").$Enums.CashboxStatus;
+            notes: string | null;
             openedAt: Date;
             closedAt: Date | null;
             openedById: string;

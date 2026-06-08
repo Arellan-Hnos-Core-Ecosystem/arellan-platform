@@ -133,6 +133,9 @@ let RealtimeGateway = class RealtimeGateway {
     emitSecurityAlert(data) {
         this.server.to("dashboard").emit("alert:security", data);
     }
+    emitAnomalyDetected(data) {
+        this.server.to("dashboard").emit("anomaly:detected", data);
+    }
     handleStatusChange(_client, data) {
         this.broadcastOrderUpdate(data);
         return { success: true, eventId: `evt-${Date.now()}` };

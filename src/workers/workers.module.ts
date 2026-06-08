@@ -6,6 +6,7 @@ import { CashboxReportWorker } from "./cashbox-report.worker"
 import { AuditAnomalyWorker } from "./audit-anomaly.worker"
 import { BackupWorker } from "./backup.worker"
 import { MonthlyDiscrepancyWorker } from "./monthly-discrepancy.worker"
+import { AlertDispatcherProcessor } from "./alert-dispatcher.processor"
 import { PrismaModule } from "../common/prisma/prisma.module"
 
 @Module({
@@ -17,6 +18,7 @@ import { PrismaModule } from "../common/prisma/prisma.module"
     AuditAnomalyWorker,
     BackupWorker,
     MonthlyDiscrepancyWorker,
+    AlertDispatcherProcessor,
   ],
   exports: [ScheduleModule],
 })
