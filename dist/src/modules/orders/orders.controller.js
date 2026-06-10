@@ -17,7 +17,12 @@ const common_1 = require("@nestjs/common");
 const platform_express_1 = require("@nestjs/platform-express");
 const swagger_1 = require("@nestjs/swagger");
 const orders_service_1 = require("./orders.service");
+const send_order_quote_use_case_1 = require("./use-cases/send-order-quote.use-case");
+const approve_quote_use_case_1 = require("./use-cases/approve-quote.use-case");
+const dispatch_parts_to_order_use_case_1 = require("./use-cases/dispatch-parts-to-order.use-case");
+const deliver_vehicle_use_case_1 = require("./use-cases/deliver-vehicle.use-case");
 const orders_dto_1 = require("./dto/orders.dto");
+const complete_work_order_use_case_1 = require("./use-cases/complete-work-order.use-case");
 const jwt_auth_guard_1 = require("../../common/guards/jwt-auth.guard");
 const roles_guard_1 = require("../../common/guards/roles.guard");
 const data_masking_interceptor_1 = require("../../common/interceptors/data-masking.interceptor");
@@ -26,8 +31,18 @@ const current_user_decorator_1 = require("../../common/decorators/current-user.d
 const client_1 = require("@prisma/client");
 let OrdersController = class OrdersController {
     ordersService;
-    constructor(ordersService) {
+    sendOrderQuoteUseCase;
+    approveQuoteUseCase;
+    dispatchPartsUseCase;
+    deliverVehicleUseCase;
+    completeWorkOrderUseCase;
+    constructor(ordersService, sendOrderQuoteUseCase, approveQuoteUseCase, dispatchPartsUseCase, deliverVehicleUseCase, completeWorkOrderUseCase) {
         this.ordersService = ordersService;
+        this.sendOrderQuoteUseCase = sendOrderQuoteUseCase;
+        this.approveQuoteUseCase = approveQuoteUseCase;
+        this.dispatchPartsUseCase = dispatchPartsUseCase;
+        this.deliverVehicleUseCase = deliverVehicleUseCase;
+        this.completeWorkOrderUseCase = completeWorkOrderUseCase;
     }
     findAll(filters) {
         return this.ordersService.findAll(filters);
@@ -63,13 +78,55 @@ let OrdersController = class OrdersController {
         return this.ordersService.uploadPhoto(id, photo, description);
     }
     async requestParts(id, dto, user) {
-        return this.ordersService.requestParts(id, dto, user.id, user.name);
+        return this.dispatchPartsUseCase.execute(id, {
+            items: dto.items,
+            requestedBy: user.id,
+            requestedByName: user.name,
+        });
     }
     async reportProgress(id, dto, user) {
         return this.ordersService.reportProgress(id, dto, user.id, user.name);
     }
+    async completeWorkOrder(id, dto, user) {
+        return this.completeWorkOrderUseCase.execute(id, {
+            userId: user.id,
+            userName: user.name,
+            userRole: user.role,
+            odometerOut: dto.odometerOut,
+            technicalNotes: dto.technicalNotes,
+            requestedStatus: dto.requestedStatus ?? "READY",
+        });
+    }
     async deletePhoto(id, photoId, user) {
         return this.ordersService.deletePhoto(id, photoId, user.id, user.name);
+    }
+    sendQuote(id, dto, user) {
+        return this.sendOrderQuoteUseCase.execute(id, {
+            laborCost: dto.laborCost,
+            partsCost: dto.partsCost,
+            validDays: dto.validDays,
+            requestedBy: user.id,
+        });
+    }
+    approveQuote(id, dto, user) {
+        return this.approveQuoteUseCase.execute(id, {
+            clientSignature: dto.clientSignature,
+            approverId: user.id,
+        });
+    }
+    rejectQuote(id, dto, user) {
+        return this.approveQuoteUseCase.reject(id, {
+            reason: dto.reason,
+            rejectedBy: user.id,
+        });
+    }
+    deliverVehicle(id, dto, user) {
+        return this.deliverVehicleUseCase.execute(id, {
+            clientSignature: dto.clientSignature,
+            deliveredBy: user.id,
+            deliveredByName: user.name,
+            paymentMethod: dto.paymentMethod,
+        });
     }
     async vehicleCheckin(body, photos, user) {
         return this.ordersService.vehicleCheckin(body, photos ?? [], user?.id ?? "system", user?.name ?? "Sistema");
@@ -296,6 +353,25 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], OrdersController.prototype, "reportProgress", null);
 __decorate([
+    (0, common_1.Post)(":id/complete"),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.MECHANIC, client_1.UserRole.TRAINEE, client_1.UserRole.ADMIN, client_1.UserRole.OWNER),
+    (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, swagger_1.ApiOperation)({
+        summary: "Finalizar trabajo de una OT (cierre de tarea del mecanico)",
+        description: "Registra el odometro de salida y notas tecnicas. Aplica segregacion de funciones QA: si el usuario es TRAINEE, la OT se envia obligatoriamente a IN_REVIEW para inspeccion del Jefe de Taller, sin importar el estado solicitado. Dispara evento de auditoria de eficiencia y notificacion en tiempo real a room:management cuando la OT requiere revision.",
+    }),
+    (0, swagger_1.ApiParam)({ name: "id", description: "ID de la OT (UUID v4)" }),
+    (0, swagger_1.ApiResponse)({ status: 201, description: "Trabajo finalizado: OT movida a READY o IN_REVIEW segun rol" }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: "OT no encontrada" }),
+    (0, swagger_1.ApiResponse)({ status: 409, description: "La OT no esta en estado IN_PROGRESS o el odometro de salida es invalido" }),
+    __param(0, (0, common_1.Param)("id")),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, orders_dto_1.CompleteWorkOrderDto, Object]),
+    __metadata("design:returntype", Promise)
+], OrdersController.prototype, "completeWorkOrder", null);
+__decorate([
     (0, common_1.Delete)(":id/photos/:photoId"),
     (0, roles_decorator_1.Roles)(client_1.UserRole.MECHANIC, client_1.UserRole.TRAINEE, client_1.UserRole.ADMIN, client_1.UserRole.OWNER),
     (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
@@ -314,6 +390,79 @@ __decorate([
     __metadata("design:paramtypes", [String, String, Object]),
     __metadata("design:returntype", Promise)
 ], OrdersController.prototype, "deletePhoto", null);
+__decorate([
+    (0, common_1.Post)(":id/quote"),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.OWNER, client_1.UserRole.ADMIN),
+    (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, swagger_1.ApiOperation)({
+        summary: "Emitir cotización al cliente",
+        description: "Calcula costos finales (laborCost + partsCost + customsCost si hay importados), valida invariante Anti-Fraude, crea Quote con QuoteStatus.SENT, genera invoice draft y encola notificación BullMQ al cliente.",
+    }),
+    (0, swagger_1.ApiParam)({ name: "id", description: "ID de la OT (UUID v4)" }),
+    (0, swagger_1.ApiResponse)({ status: 201, description: "Cotización emitida y notificación encolada" }),
+    (0, swagger_1.ApiResponse)({ status: 400, description: "Invariante de costos violada o partes importadas sin customsCost" }),
+    (0, swagger_1.ApiResponse)({ status: 409, description: "OT no está en estado BUDGETED" }),
+    __param(0, (0, common_1.Param)("id")),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, orders_dto_1.SendQuoteDto, Object]),
+    __metadata("design:returntype", void 0)
+], OrdersController.prototype, "sendQuote", null);
+__decorate([
+    (0, common_1.Post)(":id/quote/approve"),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.OWNER, client_1.UserRole.ADMIN, client_1.UserRole.CLIENT),
+    (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, swagger_1.ApiOperation)({
+        summary: "Aprobar cotización (aceptación digital del cliente)",
+        description: "Registra la firma digital del cliente, transiciona la OT de BUDGETED a IN_PROGRESS en $transaction atómica, reserva inventario y emite WebSocket a tablets de mecánicos.",
+    }),
+    (0, swagger_1.ApiParam)({ name: "id", description: "ID de la OT (UUID v4)" }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: "Cotización aprobada, OT en IN_PROGRESS" }),
+    (0, swagger_1.ApiResponse)({ status: 409, description: "Cotización no está en estado SENT" }),
+    __param(0, (0, common_1.Param)("id")),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, orders_dto_1.ApproveQuoteDto, Object]),
+    __metadata("design:returntype", void 0)
+], OrdersController.prototype, "approveQuote", null);
+__decorate([
+    (0, common_1.Post)(":id/quote/reject"),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.OWNER, client_1.UserRole.ADMIN, client_1.UserRole.CLIENT),
+    (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, swagger_1.ApiOperation)({
+        summary: "Rechazar cotización",
+        description: "El cliente rechaza la cotización. OT permanece en BUDGETED para revisión de costos.",
+    }),
+    (0, swagger_1.ApiParam)({ name: "id", description: "ID de la OT (UUID v4)" }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: "Cotización rechazada" }),
+    __param(0, (0, common_1.Param)("id")),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, orders_dto_1.RejectQuoteDto, Object]),
+    __metadata("design:returntype", void 0)
+], OrdersController.prototype, "rejectQuote", null);
+__decorate([
+    (0, common_1.Post)(":id/deliver"),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN, client_1.UserRole.OWNER),
+    (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, swagger_1.ApiOperation)({
+        summary: "Registrar entrega de vehículo al cliente",
+        description: "Transiciona la OT de READY a DELIVERED en $transaction atómica. Verifica caja abierta, crea FinancialTransaction (PAYMENT) vinculada a la sesión de caja activa y registra firma de conformidad.",
+    }),
+    (0, swagger_1.ApiParam)({ name: "id", description: "ID de la OT (UUID v4)" }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: "Vehículo entregado, transacción registrada" }),
+    (0, swagger_1.ApiResponse)({ status: 400, description: "No hay caja abierta hoy" }),
+    (0, swagger_1.ApiResponse)({ status: 409, description: "OT no está en estado READY" }),
+    __param(0, (0, common_1.Param)("id")),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, orders_dto_1.DeliverOrderDto, Object]),
+    __metadata("design:returntype", void 0)
+], OrdersController.prototype, "deliverVehicle", null);
 __decorate([
     (0, common_1.Post)("checkin"),
     (0, roles_decorator_1.Roles)(client_1.UserRole.MECHANIC, client_1.UserRole.TRAINEE, client_1.UserRole.ADMIN, client_1.UserRole.OWNER),
@@ -348,6 +497,11 @@ exports.OrdersController = OrdersController = __decorate([
     (0, common_1.Controller)("orders"),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     (0, swagger_1.ApiBearerAuth)("access-token"),
-    __metadata("design:paramtypes", [orders_service_1.OrdersService])
+    __metadata("design:paramtypes", [orders_service_1.OrdersService,
+        send_order_quote_use_case_1.SendOrderQuoteUseCase,
+        approve_quote_use_case_1.ApproveQuoteUseCase,
+        dispatch_parts_to_order_use_case_1.DispatchPartsToOrderUseCase,
+        deliver_vehicle_use_case_1.DeliverVehicleUseCase,
+        complete_work_order_use_case_1.CompleteWorkOrderUseCase])
 ], OrdersController);
 //# sourceMappingURL=orders.controller.js.map

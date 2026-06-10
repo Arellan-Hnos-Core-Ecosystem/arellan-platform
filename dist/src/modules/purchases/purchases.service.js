@@ -13,7 +13,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.PurchasesService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../common/prisma/prisma.service");
+const redis_service_1 = require("../../common/redis/redis.service");
 const client_1 = require("@prisma/client");
+const inventory_1 = require("../../domain/inventory");
 const VALID_TRANSITIONS = {
     DRAFT: [client_1.PurchaseStatus.SENT, client_1.PurchaseStatus.CANCELLED],
     SENT: [client_1.PurchaseStatus.CONFIRMED, client_1.PurchaseStatus.CANCELLED],
@@ -24,9 +26,11 @@ const VALID_TRANSITIONS = {
 };
 let PurchasesService = PurchasesService_1 = class PurchasesService {
     prisma;
+    redis;
     logger = new common_1.Logger(PurchasesService_1.name);
-    constructor(prisma) {
+    constructor(prisma, redis) {
         this.prisma = prisma;
+        this.redis = redis;
     }
     async findAll(filters) {
         const { status, supplierId, search, from, to, page = 1, limit = 20 } = filters;
@@ -114,6 +118,9 @@ let PurchasesService = PurchasesService_1 = class PurchasesService {
         const shipping = dto.shipping ?? 0;
         const customs = dto.customs ?? 0;
         const total = subtotal + tax + shipping + customs;
+        const isImported = dto.isImported ?? supplier.isImporter;
+        inventory_1.LandedCost.assertImportDeclaration(isImported, customs);
+        inventory_1.LandedCost.assertCommissionRecipient(dto.commissionAmount, dto.commissionTo);
         const purchase = await this.prisma.purchase.create({
             data: {
                 number,
@@ -125,7 +132,7 @@ let PurchasesService = PurchasesService_1 = class PurchasesService {
                 customs,
                 total,
                 currency: dto.currency ?? "PEN",
-                isImported: dto.isImported ?? supplier.isImporter,
+                isImported,
                 notes: dto.notes,
                 expectedAt: dto.expectedAt ? new Date(dto.expectedAt) : null,
                 commissionAmount: dto.commissionAmount,
@@ -191,6 +198,16 @@ let PurchasesService = PurchasesService_1 = class PurchasesService {
         if (![client_1.PurchaseStatus.CONFIRMED, client_1.PurchaseStatus.SENT, client_1.PurchaseStatus.PARTIALLY_RECEIVED].includes(purchase.status)) {
             throw new common_1.ConflictException("La compra debe estar en estado CONFIRMED, SENT o PARTIALLY_RECEIVED");
         }
+        const allocations = inventory_1.LandedCost.allocate({
+            lines: purchase.items.map((pi) => ({
+                itemId: pi.itemId,
+                quantity: pi.quantity,
+                unitCost: Number(pi.unitCost),
+            })),
+            customs: Number(purchase.customs),
+            commissionAmount: Number(purchase.commissionAmount ?? 0),
+        });
+        const touchedItemIds = new Set();
         await this.prisma.$transaction(async (tx) => {
             for (const { itemId, qty } of dto.items) {
                 const purchaseItem = purchase.items.find((pi) => pi.id === itemId);
@@ -205,9 +222,16 @@ let PurchasesService = PurchasesService_1 = class PurchasesService {
                     where: { id: itemId },
                     data: { receivedQty: purchaseItem.receivedQty + qty },
                 });
+                const allocation = allocations.find((a) => a.itemId === purchaseItem.itemId);
+                const blended = inventory_1.LandedCost.blendAverageCost(purchaseItem.item.stock, Number(purchaseItem.item.costPrice), Number(purchaseItem.item.customsCost ?? 0), qty, allocation.landedUnitCost, allocation.customsPerUnit);
                 await tx.inventoryItem.update({
                     where: { id: purchaseItem.itemId },
-                    data: { stock: { increment: qty } },
+                    data: {
+                        stock: { increment: qty },
+                        costPrice: blended.costPrice,
+                        customsCost: blended.customsCost,
+                        isImported: purchase.isImported || purchaseItem.item.isImported,
+                    },
                 });
                 await tx.inventoryMovement.create({
                     data: {
@@ -215,12 +239,17 @@ let PurchasesService = PurchasesService_1 = class PurchasesService {
                         type: client_1.MovementType.IN,
                         quantity: qty,
                         authorizedBy: userId,
-                        unitCost: purchaseItem.unitCost,
+                        unitCost: allocation.landedUnitCost,
                         justification: `Recepcion de compra ${purchase.number}`,
                     },
                 });
+                touchedItemIds.add(purchaseItem.itemId);
             }
         });
+        for (const itemId of touchedItemIds) {
+            await this.redis.del(`inventory:item:${itemId}`);
+        }
+        await this.redis.del("inventory:valuation");
         const updated = await this.prisma.purchase.findUnique({
             where: { id },
             include: { items: { include: { item: { select: { id: true, sku: true, name: true, stock: true } } } } },
@@ -271,6 +300,7 @@ let PurchasesService = PurchasesService_1 = class PurchasesService {
 exports.PurchasesService = PurchasesService;
 exports.PurchasesService = PurchasesService = PurchasesService_1 = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+        redis_service_1.RedisService])
 ], PurchasesService);
 //# sourceMappingURL=purchases.service.js.map

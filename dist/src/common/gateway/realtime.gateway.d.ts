@@ -46,6 +46,14 @@ export declare class RealtimeGateway implements OnGatewayInit, OnGatewayConnecti
         newStatus: string;
         updatedBy: string;
     }): void;
+    emitQaInspectionRequested(data: {
+        orderId: string;
+        orderNumber: string;
+        mechanicName: string;
+        role: string;
+        odometerOut: number;
+        technicalNotes: string;
+    }): void;
     emitMechanicProgress(data: MechanicProgressPayload): void;
     emitVehicleDelivered(data: {
         orderId: string;

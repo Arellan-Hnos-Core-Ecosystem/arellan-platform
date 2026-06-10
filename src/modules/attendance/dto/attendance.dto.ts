@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsInt, Min, Max, IsDateString, IsUUID, IsEnum } from "class-validator"
+import { IsOptional, IsString, IsInt, Min, Max, IsDateString, IsUUID, IsEnum, IsNotEmpty } from "class-validator"
 import { Type } from "class-transformer"
 import { AttendanceType } from "@prisma/client"
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger"
@@ -24,6 +24,20 @@ export class CheckOutDto {
   @IsUUID("4", { message: "ID de personal invalido" }) personnelId: string
   @ApiPropertyOptional({ description: "Notas de salida" })
   @IsOptional() @IsString() notes?: string
+}
+
+export class BiometricCheckInDto {
+  @ApiProperty({ description: "DNI del empleado leido por el dispositivo ZKTeco", example: "45678912" })
+  @IsString() @IsNotEmpty() dni: string
+
+  @ApiProperty({ description: "Timestamp exacto del marcado, normalizado a ISO-8601 por el bridge", example: "2026-06-10T08:17:00.000Z" })
+  @IsDateString() timestamp: string
+
+  @ApiProperty({ description: "Numero de serie del dispositivo ZKTeco de origen", example: "ZKTECO123456" })
+  @IsString() @IsNotEmpty() deviceSN: string
+
+  @ApiProperty({ description: "Metodo de verificacion: 1=huella, 4=PIN, 15=facial", example: 1 })
+  @IsInt() verifyMethod: number
 }
 
 export class VerifyAttendanceDto {

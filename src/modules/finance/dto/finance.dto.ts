@@ -1,5 +1,5 @@
 import {
-  IsNumber, IsString, IsEnum, IsOptional, IsUrl, IsIn, Min, Max, MinLength, MaxLength, ValidateIf, IsPositive,
+  IsNumber, IsString, IsEnum, IsOptional, IsUrl, IsIn, Min, Max, MinLength, MaxLength, ValidateIf, IsPositive, IsNotEmpty,
 } from "class-validator"
 import { Type } from "class-transformer"
 import { TransactionType, PaymentMethod, ExpenseCategory, Currency } from "@prisma/client"
@@ -22,6 +22,41 @@ export class CloseCashboxDto {
   @IsOptional()
   @IsString({ message: "Las notas deben ser texto" })
   notes?: string
+
+  @ApiPropertyOptional({ description: "Justificacion obligatoria si el descuadre supera S/.5 (5-500 caracteres)", example: "Devolución de vuelto a cliente que pago con billete de S/100" })
+  @IsOptional()
+  @IsString({ message: "La justificacion debe ser texto" })
+  @MinLength(5, { message: "La justificacion debe tener al menos 5 caracteres" })
+  @MaxLength(500, { message: "La justificacion no puede exceder 500 caracteres" })
+  justificationText?: string
+}
+
+export class DeliverVehicleDto {
+  @ApiProperty({ description: "Firma digital del cliente (conformidad de entrega)", example: "CONF-cli-uuid-1717800000000" })
+  @IsString({ message: "La firma del cliente es requerida" })
+  @MinLength(5)
+  clientSignature: string
+
+  @ApiProperty({ description: "Metodo de pago utilizado", enum: ["CASH", "YAPE", "PLIN", "CARD", "TRANSFER"], example: "YAPE" })
+  @IsIn(["CASH", "YAPE", "PLIN", "CARD", "TRANSFER"], { message: "Metodo de pago invalido" })
+  paymentMethod: string
+}
+
+export class CashboxOverrideDto {
+  @ApiProperty({ description: "ID de la sesion de caja bloqueada", example: "550e8400-e29b-41d4-a716-446655440000" })
+  @IsString()
+  sessionId: string
+
+  @ApiProperty({ description: "Codigo TOTP de 6 digitos del OWNER (Google Authenticator)", example: "123456" })
+  @IsString()
+  @MinLength(6, { message: "El codigo TOTP debe tener 6 digitos" })
+  @MaxLength(6, { message: "El codigo TOTP debe tener 6 digitos" })
+  totpCode: string
+
+  @ApiPropertyOptional({ description: "Justificacion del override del OWNER", example: "Error de conteo verificado con camara de seguridad" })
+  @IsOptional()
+  @IsString()
+  overrideReason?: string
 }
 
 export class CreateTransactionDto {

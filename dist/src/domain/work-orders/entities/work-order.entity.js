@@ -64,6 +64,20 @@ class WorkOrder {
         }
         return new WorkOrder({ ...this.props, discount, updatedAt: new Date() });
     }
+    assertCanSendQuote() {
+        if (this.props.laborCost.amount <= 0 && this.props.partsCost.amount <= 0) {
+            throw new Error("Invariante Anti-Fraude: no se puede emitir cotización con laborCost y partsCost ambos en cero");
+        }
+        if (!this.props.status.equals(order_status_vo_1.OrderStatus.BUDGETED)) {
+            throw new Error(`Invariante: solo se puede emitir cotización desde estado BUDGETED. Estado actual: ${this.props.status.value}`);
+        }
+    }
+    assertCanSendQuote_totalConsistency(storedTotal) {
+        const computed = this.props.laborCost.amount + this.props.partsCost.amount - this.props.discount.amount;
+        if (Math.abs(storedTotal - computed) > 0.01) {
+            throw new Error(`Regla Anti-Fraude: totalCost almacenado (${storedTotal.toFixed(2)}) no coincide con laborCost + partsCost - discount (${computed.toFixed(2)}). Posible manipulación de costos.`);
+        }
+    }
     assertCanStartProgress(hasParts) {
         if (!hasParts) {
             throw new Error("Regla Anti-Fraude AF-01: La OT debe tener repuestos asociados antes de iniciar trabajo (IN_PROGRESS)");
@@ -77,6 +91,28 @@ class WorkOrder {
         if (missing.length > 0) {
             throw new Error(`Regla Anti-Fraude #8: Posiciones de fotos faltantes: ${missing.join(", ")}. ` +
                 `Requeridas: ${WorkOrder.REQUIRED_CHECKIN_POSITIONS.join(", ")}`);
+        }
+    }
+    static resolveCompletionTarget(currentStatus, requestedStatus, role) {
+        if (!currentStatus.equals(order_status_vo_1.OrderStatus.IN_PROGRESS)) {
+            throw new Error(`Invariante: solo se puede finalizar el trabajo desde IN_PROGRESS. Estado actual: ${currentStatus.value}`);
+        }
+        let target = requestedStatus;
+        if (role === "TRAINEE") {
+            target = order_status_vo_1.OrderStatus.IN_REVIEW;
+        }
+        else if (!requestedStatus.equals(order_status_vo_1.OrderStatus.READY) && !requestedStatus.equals(order_status_vo_1.OrderStatus.IN_REVIEW)) {
+            throw new Error(`Estado solicitado invalido para finalizacion: ${requestedStatus.value}. Debe ser READY o IN_REVIEW.`);
+        }
+        if (!currentStatus.canTransitionTo(target)) {
+            const allowed = currentStatus.allowedTransitions().join(", ") || "ninguno";
+            throw new Error(`No se puede cambiar de ${currentStatus.value} a ${target.value}. Transiciones permitidas: ${allowed}`);
+        }
+        return target;
+    }
+    static assertOdometerOut(odometerIn, odometerOut) {
+        if (odometerIn !== null && odometerOut < odometerIn) {
+            throw new Error(`Regla Anti-Fraude: el kilometraje de salida (${odometerOut} km) no puede ser menor al kilometraje de ingreso (${odometerIn} km).`);
         }
     }
     canDeliver(totalPaid) {

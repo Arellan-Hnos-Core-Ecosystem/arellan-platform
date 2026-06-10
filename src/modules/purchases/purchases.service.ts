@@ -7,7 +7,9 @@ import {
   Logger,
 } from "@nestjs/common"
 import { PrismaService } from "../../common/prisma/prisma.service"
+import { RedisService } from "../../common/redis/redis.service"
 import { Prisma, PurchaseStatus, MovementType } from "@prisma/client"
+import { LandedCost } from "../../domain/inventory"
 import {
   PurchaseFilterDto,
   CreatePurchaseDto,
@@ -29,7 +31,10 @@ const VALID_TRANSITIONS: Record<PurchaseStatus, PurchaseStatus[]> = {
 export class PurchasesService {
   private readonly logger = new Logger(PurchasesService.name)
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
+  ) {}
 
   async findAll(filters: PurchaseFilterDto) {
     const { status, supplierId, search, from, to, page = 1, limit = 20 } = filters
@@ -123,6 +128,12 @@ export class PurchasesService {
     const shipping = dto.shipping ?? 0
     const customs = dto.customs ?? 0
     const total = subtotal + tax + shipping + customs
+    const isImported = dto.isImported ?? supplier.isImporter
+
+    // Anti-Fraude #2: bloquea importaciones sin costo de aduana declarado
+    // y comisiones sin beneficiario identificado.
+    LandedCost.assertImportDeclaration(isImported, customs)
+    LandedCost.assertCommissionRecipient(dto.commissionAmount, dto.commissionTo)
 
     const purchase = await this.prisma.purchase.create({
       data: {
@@ -135,7 +146,7 @@ export class PurchasesService {
         customs,
         total,
         currency: dto.currency ?? "PEN",
-        isImported: dto.isImported ?? supplier.isImporter,
+        isImported,
         notes: dto.notes,
         expectedAt: dto.expectedAt ? new Date(dto.expectedAt) : null,
         commissionAmount: dto.commissionAmount,
@@ -213,6 +224,21 @@ export class PurchasesService {
       throw new ConflictException("La compra debe estar en estado CONFIRMED, SENT o PARTIALLY_RECEIVED")
     }
 
+    // Costo real (Anti-Fraude #2): customs + commission de la OC se prorratean
+    // entre las líneas para que costPrice/customsCost del item reflejen el
+    // costo real de importación, no solo el precio unitario declarado.
+    const allocations = LandedCost.allocate({
+      lines: purchase.items.map((pi) => ({
+        itemId: pi.itemId,
+        quantity: pi.quantity,
+        unitCost: Number(pi.unitCost),
+      })),
+      customs: Number(purchase.customs),
+      commissionAmount: Number(purchase.commissionAmount ?? 0),
+    })
+
+    const touchedItemIds = new Set<string>()
+
     await this.prisma.$transaction(async (tx) => {
       for (const { itemId, qty } of dto.items) {
         const purchaseItem = purchase.items.find((pi) => pi.id === itemId)
@@ -232,9 +258,24 @@ export class PurchasesService {
           data: { receivedQty: purchaseItem.receivedQty + qty },
         })
 
+        const allocation = allocations.find((a) => a.itemId === purchaseItem.itemId)!
+        const blended = LandedCost.blendAverageCost(
+          purchaseItem.item.stock,
+          Number(purchaseItem.item.costPrice),
+          Number(purchaseItem.item.customsCost ?? 0),
+          qty,
+          allocation.landedUnitCost,
+          allocation.customsPerUnit,
+        )
+
         await tx.inventoryItem.update({
           where: { id: purchaseItem.itemId },
-          data: { stock: { increment: qty } },
+          data: {
+            stock: { increment: qty },
+            costPrice: blended.costPrice,
+            customsCost: blended.customsCost,
+            isImported: purchase.isImported || purchaseItem.item.isImported,
+          },
         })
 
         await tx.inventoryMovement.create({
@@ -243,12 +284,19 @@ export class PurchasesService {
             type: MovementType.IN,
             quantity: qty,
             authorizedBy: userId,
-            unitCost: purchaseItem.unitCost,
+            unitCost: allocation.landedUnitCost,
             justification: `Recepcion de compra ${purchase.number}`,
           },
         })
+
+        touchedItemIds.add(purchaseItem.itemId)
       }
     })
+
+    for (const itemId of touchedItemIds) {
+      await this.redis.del(`inventory:item:${itemId}`)
+    }
+    await this.redis.del("inventory:valuation")
 
     const updated = await this.prisma.purchase.findUnique({
       where: { id },

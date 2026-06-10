@@ -12,15 +12,19 @@ const finance_controller_1 = require("./finance.controller");
 const alerts_controller_1 = require("./alerts.controller");
 const payment_webhook_controller_1 = require("./payment-webhook.controller");
 const finance_service_1 = require("./finance.service");
+const close_cashbox_session_use_case_1 = require("./use-cases/close-cashbox-session.use-case");
 const cache_manager_service_1 = require("../../common/cache/cache-manager.service");
+const realtime_module_1 = require("../../common/gateway/realtime.module");
 let FinanceModule = class FinanceModule {
 };
 exports.FinanceModule = FinanceModule;
 exports.FinanceModule = FinanceModule = __decorate([
     (0, common_1.Module)({
+        imports: [realtime_module_1.RealtimeModule],
         controllers: [finance_controller_1.FinanceController, alerts_controller_1.AlertsController, payment_webhook_controller_1.PaymentWebhookController],
         providers: [
             finance_service_1.FinanceService,
+            close_cashbox_session_use_case_1.CloseCashboxSessionUseCase,
             {
                 provide: "FINANCE_CACHE",
                 useFactory: (cacheManager) => ({

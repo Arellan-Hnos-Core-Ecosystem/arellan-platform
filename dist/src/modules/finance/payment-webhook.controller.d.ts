@@ -13,20 +13,20 @@ export declare class PaymentWebhookController {
         status: string;
         payment: {
             id: string;
-            notes: string | null;
             createdAt: Date;
+            notes: string | null;
+            verifiedBy: string | null;
             amount: import("@prisma/client/runtime/library").Decimal;
-            paidAt: Date;
+            workOrderId: string | null;
+            invoiceId: string | null;
             method: import(".prisma/client").$Enums.PaymentMethod;
             reference: string | null;
             receivedBy: string;
-            verifiedBy: string | null;
             channel: import(".prisma/client").$Enums.PaymentChannel;
             isPersonalYape: boolean;
             yapeAccount: string | null;
             receiptUrl: string | null;
-            invoiceId: string | null;
-            workOrderId: string | null;
+            paidAt: Date;
         };
     }>;
 }

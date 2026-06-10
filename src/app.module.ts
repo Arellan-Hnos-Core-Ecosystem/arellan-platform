@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common"
 import { ConfigModule } from "@nestjs/config"
 import { ThrottlerModule, ThrottlerGuard } from "@nestjs/throttler"
+import { EventEmitterModule } from "@nestjs/event-emitter"
 import { APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core"
 import { PrismaModule } from "./common/prisma/prisma.module"
 import { RedisModule } from "./common/redis/redis.module"
@@ -10,6 +11,7 @@ import { QueueModule } from "./queues/queue.module"
 import { WorkersModule } from "./workers/workers.module"
 import { GatewaysModule } from "./gateways/gateways.module"
 import { RealtimeModule } from "./common/gateway/realtime.module"
+import { IotBridgeModule } from "./common/iot-bridge/iot-bridge.module"
 import { AuthModule } from "./modules/auth/auth.module"
 import { OrdersModule } from "./modules/orders/orders.module"
 import { FinanceModule } from "./modules/finance/finance.module"
@@ -29,11 +31,13 @@ import { HealthModule } from "./common/health/health.module"
 import { PublicModule } from "./common/public/public.module"
 import { AntiFraudModule } from "./common/anti-fraud/anti-fraud.module"
 import { DashboardModule } from "./modules/dashboard/dashboard.module"
+import { AnalyticsModule } from "./modules/analytics/analytics.module"
 import { AuditInterceptor } from "./common/interceptors/audit.interceptor"
 import { DataMaskingInterceptor } from "./common/interceptors/data-masking.interceptor"
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    EventEmitterModule.forRoot(),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 60 }]),
     PrismaModule,
     RedisModule,
@@ -43,6 +47,7 @@ import { DataMaskingInterceptor } from "./common/interceptors/data-masking.inter
     WorkersModule,
     GatewaysModule,
     RealtimeModule,
+    IotBridgeModule,
     AuthModule,
     OrdersModule,
     FinanceModule,
@@ -62,6 +67,7 @@ import { DataMaskingInterceptor } from "./common/interceptors/data-masking.inter
     PublicModule,
     AntiFraudModule,
     DashboardModule,
+    AnalyticsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

@@ -1,6 +1,6 @@
 import { PrismaService } from "../../common/prisma/prisma.service";
 import { Prisma, UserRole } from "@prisma/client";
-import { CreateOrderDto, UpdateOrderDto, UpdateStatusDto, OrderFilterDto, PaginatedResult, ApplyDiscountDto, RequestPartsDto, MechanicProgressDto, VehicleCheckinDto } from "./dto/orders.dto";
+import { CreateOrderDto, UpdateOrderDto, UpdateStatusDto, OrderFilterDto, PaginatedResult, ApplyDiscountDto, RequestPartsDto, MechanicProgressDto, VehicleCheckinDto, CameraCaptureDto } from "./dto/orders.dto";
 import { RealtimeGateway } from "../../common/gateway/realtime.gateway";
 export declare class OrdersService {
     private readonly prisma;
@@ -199,8 +199,28 @@ export declare class OrdersService {
             id: string;
             method: import(".prisma/client").$Enums.PaymentMethod;
             amount: Prisma.Decimal;
+            isPersonalYape: boolean;
+            yapeAccount: string | null;
             paidAt: Date;
         }[];
+        quote: {
+            number: string;
+            id: string;
+            status: import(".prisma/client").$Enums.QuoteStatus;
+            tax: Prisma.Decimal;
+            createdBy: string;
+            createdAt: Date;
+            updatedAt: Date;
+            clientId: string;
+            notes: string | null;
+            workOrderId: string | null;
+            validUntil: Date;
+            subtotal: Prisma.Decimal;
+            total: Prisma.Decimal;
+            approvedAt: Date | null;
+            rejectedAt: Date | null;
+            rejectionReason: string | null;
+        } | null;
     } & {
         number: string;
         id: string;
@@ -690,5 +710,12 @@ export declare class OrdersService {
         success: boolean;
         orderId: string;
         orderNumber: string;
+    }>;
+    captureCameraPhoto(orderId: string, dto: CameraCaptureDto): Promise<{
+        orderId: string;
+        orderNumber: string;
+        position: string;
+        hash: string;
+        photoCount: number;
     }>;
 }

@@ -38,9 +38,9 @@ export declare class InvoicesService {
             approvedBy: string | null;
             total: Prisma.Decimal;
             subtotal: Prisma.Decimal;
-            dueDate: Date | null;
             paidAmount: Prisma.Decimal;
             dueAmount: Prisma.Decimal;
+            dueDate: Date | null;
             issuedAt: Date | null;
             cancelledAt: Date | null;
             cancelReason: string | null;
@@ -187,9 +187,9 @@ export declare class InvoicesService {
         approvedBy: string | null;
         total: Prisma.Decimal;
         subtotal: Prisma.Decimal;
-        dueDate: Date | null;
         paidAmount: Prisma.Decimal;
         dueAmount: Prisma.Decimal;
+        dueDate: Date | null;
         issuedAt: Date | null;
         cancelledAt: Date | null;
         cancelReason: string | null;
@@ -222,9 +222,9 @@ export declare class InvoicesService {
         approvedBy: string | null;
         total: Prisma.Decimal;
         subtotal: Prisma.Decimal;
-        dueDate: Date | null;
         paidAmount: Prisma.Decimal;
         dueAmount: Prisma.Decimal;
+        dueDate: Date | null;
         issuedAt: Date | null;
         cancelledAt: Date | null;
         cancelReason: string | null;
@@ -246,9 +246,9 @@ export declare class InvoicesService {
         approvedBy: string | null;
         total: Prisma.Decimal;
         subtotal: Prisma.Decimal;
-        dueDate: Date | null;
         paidAmount: Prisma.Decimal;
         dueAmount: Prisma.Decimal;
+        dueDate: Date | null;
         issuedAt: Date | null;
         cancelledAt: Date | null;
         cancelReason: string | null;
@@ -270,9 +270,9 @@ export declare class InvoicesService {
         approvedBy: string | null;
         total: Prisma.Decimal;
         subtotal: Prisma.Decimal;
-        dueDate: Date | null;
         paidAmount: Prisma.Decimal;
         dueAmount: Prisma.Decimal;
+        dueDate: Date | null;
         issuedAt: Date | null;
         cancelledAt: Date | null;
         cancelReason: string | null;
@@ -302,9 +302,9 @@ export declare class InvoicesService {
         approvedBy: string | null;
         total: Prisma.Decimal;
         subtotal: Prisma.Decimal;
-        dueDate: Date | null;
         paidAmount: Prisma.Decimal;
         dueAmount: Prisma.Decimal;
+        dueDate: Date | null;
         issuedAt: Date | null;
         cancelledAt: Date | null;
         cancelReason: string | null;
@@ -338,9 +338,9 @@ export declare class InvoicesService {
         approvedBy: string | null;
         total: Prisma.Decimal;
         subtotal: Prisma.Decimal;
-        dueDate: Date | null;
         paidAmount: Prisma.Decimal;
         dueAmount: Prisma.Decimal;
+        dueDate: Date | null;
         issuedAt: Date | null;
         cancelledAt: Date | null;
         cancelReason: string | null;

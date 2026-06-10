@@ -92,6 +92,10 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
         client.join("dashboard")
       }
 
+      if (role === "OWNER" || role === "ADMIN") {
+        client.join("room:management")
+      }
+
       this.logger.log(
         `WS client connected: ${payload.email || userId} (${role})`
       )
@@ -136,6 +140,19 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     }
   }
 
+  emitQaInspectionRequested(data: {
+    orderId: string
+    orderNumber: string
+    mechanicName: string
+    role: string
+    odometerOut: number
+    technicalNotes: string
+  }) {
+    this.server.to("room:management").emit("qa:inspection_requested", data)
+    this.server.to("dashboard").emit("qa:inspection_requested", data)
+    this.server.to(`order:${data.orderId}`).emit("qa:inspection_requested", data)
+  }
+
   emitMechanicProgress(data: MechanicProgressPayload) {
     this.server.to("dashboard").emit("mechanic:progress", data)
     if (data.orderId) {
@@ -162,6 +179,10 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
         message: "Tu vehiculo esta listo para recoger",
       })
     }
+  }
+
+  emitCashboxClosed(data: { sessionId: string; status: string; closedBy: string }) {
+    this.server.to("dashboard").emit("cashbox:closed", data)
   }
 
   emitInventoryLowStock(data: {

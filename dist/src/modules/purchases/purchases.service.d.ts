@@ -1,10 +1,12 @@
 import { PrismaService } from "../../common/prisma/prisma.service";
+import { RedisService } from "../../common/redis/redis.service";
 import { Prisma, PurchaseStatus } from "@prisma/client";
 import { PurchaseFilterDto, CreatePurchaseDto, ReceiveItemsDto } from "./dto/purchases.dto";
 export declare class PurchasesService {
     private readonly prisma;
+    private readonly redis;
     private readonly logger;
-    constructor(prisma: PrismaService);
+    constructor(prisma: PrismaService, redis: RedisService);
     findAll(filters: PurchaseFilterDto): Promise<{
         data: ({
             supplier: {
@@ -31,12 +33,12 @@ export declare class PurchasesService {
             currency: string;
             approvedBy: string | null;
             total: Prisma.Decimal;
+            subtotal: Prisma.Decimal;
             shipping: Prisma.Decimal;
             customs: Prisma.Decimal;
             expectedAt: Date | null;
             commissionAmount: Prisma.Decimal | null;
             commissionTo: string | null;
-            subtotal: Prisma.Decimal;
             commissionPaid: boolean;
             orderedAt: Date | null;
         })[];
@@ -114,12 +116,12 @@ export declare class PurchasesService {
         currency: string;
         approvedBy: string | null;
         total: Prisma.Decimal;
+        subtotal: Prisma.Decimal;
         shipping: Prisma.Decimal;
         customs: Prisma.Decimal;
         expectedAt: Date | null;
         commissionAmount: Prisma.Decimal | null;
         commissionTo: string | null;
-        subtotal: Prisma.Decimal;
         commissionPaid: boolean;
         orderedAt: Date | null;
     }>;
@@ -159,12 +161,12 @@ export declare class PurchasesService {
         currency: string;
         approvedBy: string | null;
         total: Prisma.Decimal;
+        subtotal: Prisma.Decimal;
         shipping: Prisma.Decimal;
         customs: Prisma.Decimal;
         expectedAt: Date | null;
         commissionAmount: Prisma.Decimal | null;
         commissionTo: string | null;
-        subtotal: Prisma.Decimal;
         commissionPaid: boolean;
         orderedAt: Date | null;
     }>;
@@ -198,12 +200,12 @@ export declare class PurchasesService {
         currency: string;
         approvedBy: string | null;
         total: Prisma.Decimal;
+        subtotal: Prisma.Decimal;
         shipping: Prisma.Decimal;
         customs: Prisma.Decimal;
         expectedAt: Date | null;
         commissionAmount: Prisma.Decimal | null;
         commissionTo: string | null;
-        subtotal: Prisma.Decimal;
         commissionPaid: boolean;
         orderedAt: Date | null;
     }>;
@@ -240,12 +242,12 @@ export declare class PurchasesService {
         currency: string;
         approvedBy: string | null;
         total: Prisma.Decimal;
+        subtotal: Prisma.Decimal;
         shipping: Prisma.Decimal;
         customs: Prisma.Decimal;
         expectedAt: Date | null;
         commissionAmount: Prisma.Decimal | null;
         commissionTo: string | null;
-        subtotal: Prisma.Decimal;
         commissionPaid: boolean;
         orderedAt: Date | null;
     }) | null>;
@@ -268,12 +270,12 @@ export declare class PurchasesService {
         currency: string;
         approvedBy: string | null;
         total: Prisma.Decimal;
+        subtotal: Prisma.Decimal;
         shipping: Prisma.Decimal;
         customs: Prisma.Decimal;
         expectedAt: Date | null;
         commissionAmount: Prisma.Decimal | null;
         commissionTo: string | null;
-        subtotal: Prisma.Decimal;
         commissionPaid: boolean;
         orderedAt: Date | null;
     })[]>;
@@ -300,12 +302,12 @@ export declare class PurchasesService {
         currency: string;
         approvedBy: string | null;
         total: Prisma.Decimal;
+        subtotal: Prisma.Decimal;
         shipping: Prisma.Decimal;
         customs: Prisma.Decimal;
         expectedAt: Date | null;
         commissionAmount: Prisma.Decimal | null;
         commissionTo: string | null;
-        subtotal: Prisma.Decimal;
         commissionPaid: boolean;
         orderedAt: Date | null;
     })[]>;

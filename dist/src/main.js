@@ -13,12 +13,11 @@ async function bootstrap() {
     const config = app.get(config_1.ConfigService);
     const logger = new common_1.Logger("Bootstrap");
     app.use((0, helmet_1.default)());
+    const defaultCorsOrigins = config.get("NODE_ENV") === "production"
+        ? "https://app.arellan.pe"
+        : "http://localhost:3002,http://localhost:3003,http://localhost:3004,http://localhost:3005,http://localhost:3006";
     app.enableCors({
-        origin: config.get("NODE_ENV") === "production"
-            ? config
-                .get("CORS_ORIGINS", "https://app.arellan.pe")
-                .split(",")
-            : true,
+        origin: config.get("CORS_ORIGINS", defaultCorsOrigins).split(","),
         credentials: true,
     });
     app.setGlobalPrefix("api/v1");

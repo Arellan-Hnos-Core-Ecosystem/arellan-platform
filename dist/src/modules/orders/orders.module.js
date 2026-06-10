@@ -12,15 +12,26 @@ const orders_controller_1 = require("./orders.controller");
 const orders_service_1 = require("./orders.service");
 const realtime_module_1 = require("../../common/gateway/realtime.module");
 const cache_manager_service_1 = require("../../common/cache/cache-manager.service");
+const finance_module_1 = require("../finance/finance.module");
+const send_order_quote_use_case_1 = require("./use-cases/send-order-quote.use-case");
+const approve_quote_use_case_1 = require("./use-cases/approve-quote.use-case");
+const dispatch_parts_to_order_use_case_1 = require("./use-cases/dispatch-parts-to-order.use-case");
+const deliver_vehicle_use_case_1 = require("./use-cases/deliver-vehicle.use-case");
+const complete_work_order_use_case_1 = require("./use-cases/complete-work-order.use-case");
 let OrdersModule = class OrdersModule {
 };
 exports.OrdersModule = OrdersModule;
 exports.OrdersModule = OrdersModule = __decorate([
     (0, common_1.Module)({
-        imports: [realtime_module_1.RealtimeModule],
+        imports: [realtime_module_1.RealtimeModule, finance_module_1.FinanceModule],
         controllers: [orders_controller_1.OrdersController],
         providers: [
             orders_service_1.OrdersService,
+            send_order_quote_use_case_1.SendOrderQuoteUseCase,
+            approve_quote_use_case_1.ApproveQuoteUseCase,
+            dispatch_parts_to_order_use_case_1.DispatchPartsToOrderUseCase,
+            deliver_vehicle_use_case_1.DeliverVehicleUseCase,
+            complete_work_order_use_case_1.CompleteWorkOrderUseCase,
             {
                 provide: "ORDERS_CACHE",
                 useFactory: (cacheManager) => ({

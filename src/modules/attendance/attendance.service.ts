@@ -7,6 +7,7 @@ import {
 } from "@nestjs/common"
 import { PrismaService } from "../../common/prisma/prisma.service"
 import { Prisma } from "@prisma/client"
+import { WorkSchedule } from "../../domain/personnel"
 import { AttendanceFilterDto } from "./dto/attendance.dto"
 
 @Injectable()
@@ -144,7 +145,12 @@ export class AttendanceService {
       return updated
     }
 
-    const isLate = new Date().getHours() >= 9
+    const scheduleSetting = await this.prisma.setting.findUnique({
+      where: { key: "attendance_schedule" },
+    })
+    const schedule = WorkSchedule.parse(scheduleSetting?.value ?? null)
+    const isLate = WorkSchedule.evaluate(new Date(), schedule).isLate
+
     const record = await this.prisma.attendance.create({
       data: {
         personnelId,

@@ -1,11 +1,20 @@
-import { Controller, Get, Param, Query } from "@nestjs/common"
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from "@nestjs/swagger"
+import { Controller, Get, Post, Param, Query, Body, UseGuards } from "@nestjs/common"
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiHeader } from "@nestjs/swagger"
 import { PrismaService } from "../prisma/prisma.service"
+import { DeviceAuthGuard } from "../guards/device-auth.guard"
+import { OrdersService } from "../../modules/orders/orders.service"
+import { ProcessBiometricAttendanceUseCase } from "../../modules/attendance/use-cases/process-biometric-attendance.use-case"
+import { CameraCaptureDto } from "../../modules/orders/dto/orders.dto"
+import { BiometricCheckInDto } from "../../modules/attendance/dto/attendance.dto"
 
 @ApiTags("Public")
 @Controller("public")
 export class PublicController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ordersService: OrdersService,
+    private readonly processBiometricAttendanceUseCase: ProcessBiometricAttendanceUseCase,
+  ) {}
 
   @Get("orders/lookup")
   @ApiOperation({
@@ -49,5 +58,37 @@ export class PublicController {
     const order = await this.prisma.workOrder.findUnique({ where: { number: orderNumber.toUpperCase().trim() }, select: { number: true, status: true, description: true, receivedAt: true, estimatedDelivery: true, deliveredAt: true, vehicle: { select: { plate: true, brand: true, model: true, year: true, color: true } }, client: { select: { firstName: true } }, statusHistory: { select: { status: true, timestamp: true }, orderBy: { timestamp: "asc" } } } })
     if (!order) return { found: false, message: "Orden de trabajo no encontrada" }
     return { found: true, order }
+  }
+
+  @Post("iot/attendance/biometric")
+  @UseGuards(DeviceAuthGuard)
+  @ApiTags("IoT")
+  @ApiHeader({ name: "x-device-key", description: "Secreto compartido del bridge IoT (IOT_BRIDGE_SHARED_SECRET)" })
+  @ApiOperation({
+    summary: "Check-in biometrico ZKTeco (arellan-hardware-iot)",
+    description: "Recibe eventos de asistencia sanitizados por ZktecoDeviceAdapter. Compara el timestamp contra Settings.attendance_schedule; si excede la tolerancia, marca el registro como LATE e injerta la penalizacion salarial en AuditLog de forma atomica (ProcessBiometricAttendanceUseCase).",
+  })
+  @ApiResponse({ status: 201, description: "Asistencia procesada" })
+  @ApiResponse({ status: 401, description: "Credencial de dispositivo invalida" })
+  @ApiResponse({ status: 404, description: "No existe personal con ese DNI" })
+  async biometricAttendance(@Body() dto: BiometricCheckInDto) {
+    return this.processBiometricAttendanceUseCase.execute(dto)
+  }
+
+  @Post("iot/orders/:id/photos/camera-capture")
+  @UseGuards(DeviceAuthGuard)
+  @ApiTags("IoT")
+  @ApiHeader({ name: "x-device-key", description: "Secreto compartido del bridge IoT (IOT_BRIDGE_SHARED_SECRET)" })
+  @ApiOperation({
+    summary: "Captura ONVIF vinculada a OT (arellan-hardware-iot)",
+    description: "Recibe el snapshot capturado por OnvifCameraClient al validar una placa en arellan-mechanic-ui. Calcula el hash SHA-256 en el servidor y vincula la foto a una posicion de check-in obligatoria de la OT (Regla Anti-Fraude #8).",
+  })
+  @ApiParam({ name: "id", description: "ID de la OT (UUID v4)" })
+  @ApiResponse({ status: 201, description: "Foto vinculada a la OT" })
+  @ApiResponse({ status: 400, description: "Posicion invalida" })
+  @ApiResponse({ status: 401, description: "Credencial de dispositivo invalida" })
+  @ApiResponse({ status: 404, description: "OT no encontrada" })
+  async cameraCapture(@Param("id") id: string, @Body() dto: CameraCaptureDto) {
+    return this.ordersService.captureCameraPhoto(id, dto)
   }
 }

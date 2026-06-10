@@ -1,6 +1,7 @@
 import { Controller, Post, Get, Body, Param, Query, UseGuards } from "@nestjs/common"
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam, ApiQuery } from "@nestjs/swagger"
 import { FinanceService } from "./finance.service"
+import { CloseCashboxSessionUseCase } from "./use-cases/close-cashbox-session.use-case"
 import { AuthUser } from "../auth/auth.service"
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard"
 import { RolesGuard } from "../../common/guards/roles.guard"
@@ -8,12 +9,15 @@ import { MfaRequiredGuard } from "../../common/guards/mfa-required.guard"
 import { Roles } from "../../common/decorators/roles.decorator"
 import { CurrentUser } from "../../common/decorators/current-user.decorator"
 import { UserRole } from "@prisma/client"
-import { OpenCashboxDto, CloseCashboxDto, CreateTransactionDto, CreateExpenseDto, ApproveExpenseDto, ExpenseFiltersDto } from "./dto/finance.dto"
+import { OpenCashboxDto, CloseCashboxDto, CreateTransactionDto, CreateExpenseDto, ApproveExpenseDto, ExpenseFiltersDto, CashboxOverrideDto } from "./dto/finance.dto"
 
 @ApiTags("Finance")
 @Controller("finance")
 export class FinanceController {
-  constructor(private readonly financeService: FinanceService) {}
+  constructor(
+    private readonly financeService: FinanceService,
+    private readonly closeCashboxSessionUseCase: CloseCashboxSessionUseCase,
+  ) {}
 
   @Post("cashbox/open")
   @UseGuards(JwtAuthGuard, RolesGuard, MfaRequiredGuard)
@@ -44,7 +48,10 @@ export class FinanceController {
   @ApiResponse({ status: 403, description: "Solo ADMIN u OWNER" })
   @ApiResponse({ status: 404, description: "No hay caja abierta para cerrar" })
   closeCashbox(@CurrentUser() user: AuthUser, @Body() dto: CloseCashboxDto) {
-    return this.financeService.closeCashbox(user.id, dto)
+    return this.closeCashboxSessionUseCase.execute(user.id, {
+      actualCash: dto.actualCash,
+      justificationText: dto.justificationText,
+    })
   }
 
   @Get("cashbox/today")
@@ -166,6 +173,73 @@ export class FinanceController {
   @ApiResponse({ status: 401, description: "JWT invalido" })
   getCashboxHistory(@Query("limit") limit?: number, @Query("cursor") cursor?: string) {
     return this.financeService.getCashboxHistory(limit, cursor)
+  }
+
+  @Post("cashbox/override")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER)
+  @ApiBearerAuth("access-token")
+  @ApiOperation({
+    summary: "Override de caja bloqueada (OWNER + TOTP)",
+    description: "Desbloquea una sesión de caja en estado BLOCKED. Requiere código TOTP de 6 dígitos del OWNER via Google Authenticator. Anti-Fraude #2: solo OWNER puede desbloquear.",
+  })
+  @ApiResponse({ status: 200, description: "Caja desbloqueada y cerrada con discrepancia" })
+  @ApiResponse({ status: 400, description: "Código TOTP inválido o sesión no está BLOCKED" })
+  @ApiResponse({ status: 403, description: "Solo OWNER" })
+  async overrideCashbox(@CurrentUser() user: AuthUser, @Body() dto: CashboxOverrideDto) {
+    const { authenticator } = await import("otplib")
+
+    const owner = await this.financeService["prisma"].account.findUnique({
+      where: { id: user.id },
+      select: { mfaSecret: true, mfaEnabled: true },
+    })
+
+    if (!owner?.mfaEnabled || !owner?.mfaSecret) {
+      throw new Error("El OWNER no tiene MFA configurado. Configure Google Authenticator primero.")
+    }
+
+    const isValid = authenticator.verify({ token: dto.totpCode, secret: owner.mfaSecret })
+    if (!isValid) {
+      throw new Error("Código TOTP inválido o expirado.")
+    }
+
+    const session = await this.financeService["prisma"].cashboxSession.findUnique({
+      where: { id: dto.sessionId },
+    })
+    if (!session || session.status !== "BLOCKED") {
+      throw new Error("La sesión de caja no existe o no está en estado BLOCKED.")
+    }
+
+    const unblocked = await this.financeService["prisma"].cashboxSession.update({
+      where: { id: dto.sessionId },
+      data: {
+        status: "CLOSED_WITH_DISCREPANCY" as any,
+        closedAt: new Date(),
+        notes: `OVERRIDE por OWNER ${user.id} con TOTP. ${dto.overrideReason ?? ""}`.trim(),
+      },
+    })
+
+    await this.financeService["prisma"].auditLog.create({
+      data: {
+        userId: user.id,
+        userName: "owner-override",
+        role: "OWNER" as any,
+        action: "CASHBOX_OVERRIDE_TOTP",
+        entity: "CashboxSession",
+        entityId: dto.sessionId,
+        severity: "WARNING" as any,
+        ipAddress: "system",
+        metadata: { overrideReason: dto.overrideReason ?? null } as any,
+      },
+    })
+
+    return {
+      success: true,
+      sessionId: dto.sessionId,
+      newStatus: unblocked.status,
+      overriddenBy: user.id,
+      overriddenAt: new Date().toISOString(),
+    }
   }
 
   @Post("qr/generate")

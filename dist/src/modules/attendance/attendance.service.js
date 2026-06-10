@@ -13,6 +13,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AttendanceService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../common/prisma/prisma.service");
+const personnel_1 = require("../../domain/personnel");
 let AttendanceService = AttendanceService_1 = class AttendanceService {
     prisma;
     logger = new common_1.Logger(AttendanceService_1.name);
@@ -132,7 +133,11 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
             this.logger.log(`Check-in actualizado: personal=${personnelId}`);
             return updated;
         }
-        const isLate = new Date().getHours() >= 9;
+        const scheduleSetting = await this.prisma.setting.findUnique({
+            where: { key: "attendance_schedule" },
+        });
+        const schedule = personnel_1.WorkSchedule.parse(scheduleSetting?.value ?? null);
+        const isLate = personnel_1.WorkSchedule.evaluate(new Date(), schedule).isLate;
         const record = await this.prisma.attendance.create({
             data: {
                 personnelId,

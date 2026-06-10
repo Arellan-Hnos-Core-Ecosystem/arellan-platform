@@ -1,7 +1,13 @@
 import { PrismaService } from "../prisma/prisma.service";
+import { OrdersService } from "../../modules/orders/orders.service";
+import { ProcessBiometricAttendanceUseCase } from "../../modules/attendance/use-cases/process-biometric-attendance.use-case";
+import { CameraCaptureDto } from "../../modules/orders/dto/orders.dto";
+import { BiometricCheckInDto } from "../../modules/attendance/dto/attendance.dto";
 export declare class PublicController {
     private readonly prisma;
-    constructor(prisma: PrismaService);
+    private readonly ordersService;
+    private readonly processBiometricAttendanceUseCase;
+    constructor(prisma: PrismaService, ordersService: OrdersService, processBiometricAttendanceUseCase: ProcessBiometricAttendanceUseCase);
     lookup(plate?: string, code?: string): Promise<{
         found: boolean;
         message: string;
@@ -85,7 +91,6 @@ export declare class PublicController {
         order: {
             number: string;
             status: import(".prisma/client").$Enums.OrderStatus;
-            description: string;
             client: {
                 firstName: string;
             };
@@ -96,6 +101,7 @@ export declare class PublicController {
                 year: number;
                 color: string | null;
             };
+            description: string;
             receivedAt: Date;
             estimatedDelivery: Date | null;
             deliveredAt: Date | null;
@@ -105,5 +111,21 @@ export declare class PublicController {
             }[];
         };
         message?: undefined;
+    }>;
+    biometricAttendance(dto: BiometricCheckInDto): Promise<{
+        attendanceId: string;
+        personnelId: string;
+        date: Date;
+        status: "PRESENT" | "LATE";
+        isLate: boolean;
+        lateMinutes: number;
+        penaltyAmount: number;
+    }>;
+    cameraCapture(id: string, dto: CameraCaptureDto): Promise<{
+        orderId: string;
+        orderNumber: string;
+        position: string;
+        hash: string;
+        photoCount: number;
     }>;
 }

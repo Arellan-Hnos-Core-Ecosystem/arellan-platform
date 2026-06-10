@@ -9,10 +9,15 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.PublicModule = void 0;
 const common_1 = require("@nestjs/common");
 const public_controller_1 = require("./public.controller");
+const orders_module_1 = require("../../modules/orders/orders.module");
+const attendance_module_1 = require("../../modules/attendance/attendance.module");
 let PublicModule = class PublicModule {
 };
 exports.PublicModule = PublicModule;
 exports.PublicModule = PublicModule = __decorate([
-    (0, common_1.Module)({ controllers: [public_controller_1.PublicController] })
+    (0, common_1.Module)({
+        imports: [orders_module_1.OrdersModule, attendance_module_1.AttendanceModule],
+        controllers: [public_controller_1.PublicController],
+    })
 ], PublicModule);
 //# sourceMappingURL=public.module.js.map

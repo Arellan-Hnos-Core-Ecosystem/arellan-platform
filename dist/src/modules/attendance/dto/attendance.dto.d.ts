@@ -15,6 +15,12 @@ export declare class CheckOutDto {
     personnelId: string;
     notes?: string;
 }
+export declare class BiometricCheckInDto {
+    dni: string;
+    timestamp: string;
+    deviceSN: string;
+    verifyMethod: number;
+}
 export declare class VerifyAttendanceDto {
     personnelId: string;
     date: string;

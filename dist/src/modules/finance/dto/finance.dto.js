@@ -9,7 +9,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ExpenseFiltersDto = exports.ApproveExpenseDto = exports.CreateExpenseDto = exports.CreateTransactionDto = exports.CloseCashboxDto = exports.OpenCashboxDto = void 0;
+exports.ExpenseFiltersDto = exports.ApproveExpenseDto = exports.CreateExpenseDto = exports.CreateTransactionDto = exports.CashboxOverrideDto = exports.DeliverVehicleDto = exports.CloseCashboxDto = exports.OpenCashboxDto = void 0;
 const class_validator_1 = require("class-validator");
 const class_transformer_1 = require("class-transformer");
 const client_1 = require("@prisma/client");
@@ -27,6 +27,7 @@ __decorate([
 class CloseCashboxDto {
     actualCash;
     notes;
+    justificationText;
 }
 exports.CloseCashboxDto = CloseCashboxDto;
 __decorate([
@@ -41,6 +42,54 @@ __decorate([
     (0, class_validator_1.IsString)({ message: "Las notas deben ser texto" }),
     __metadata("design:type", String)
 ], CloseCashboxDto.prototype, "notes", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ description: "Justificacion obligatoria si el descuadre supera S/.5 (5-500 caracteres)", example: "Devolución de vuelto a cliente que pago con billete de S/100" }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)({ message: "La justificacion debe ser texto" }),
+    (0, class_validator_1.MinLength)(5, { message: "La justificacion debe tener al menos 5 caracteres" }),
+    (0, class_validator_1.MaxLength)(500, { message: "La justificacion no puede exceder 500 caracteres" }),
+    __metadata("design:type", String)
+], CloseCashboxDto.prototype, "justificationText", void 0);
+class DeliverVehicleDto {
+    clientSignature;
+    paymentMethod;
+}
+exports.DeliverVehicleDto = DeliverVehicleDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({ description: "Firma digital del cliente (conformidad de entrega)", example: "CONF-cli-uuid-1717800000000" }),
+    (0, class_validator_1.IsString)({ message: "La firma del cliente es requerida" }),
+    (0, class_validator_1.MinLength)(5),
+    __metadata("design:type", String)
+], DeliverVehicleDto.prototype, "clientSignature", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ description: "Metodo de pago utilizado", enum: ["CASH", "YAPE", "PLIN", "CARD", "TRANSFER"], example: "YAPE" }),
+    (0, class_validator_1.IsIn)(["CASH", "YAPE", "PLIN", "CARD", "TRANSFER"], { message: "Metodo de pago invalido" }),
+    __metadata("design:type", String)
+], DeliverVehicleDto.prototype, "paymentMethod", void 0);
+class CashboxOverrideDto {
+    sessionId;
+    totpCode;
+    overrideReason;
+}
+exports.CashboxOverrideDto = CashboxOverrideDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({ description: "ID de la sesion de caja bloqueada", example: "550e8400-e29b-41d4-a716-446655440000" }),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CashboxOverrideDto.prototype, "sessionId", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ description: "Codigo TOTP de 6 digitos del OWNER (Google Authenticator)", example: "123456" }),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MinLength)(6, { message: "El codigo TOTP debe tener 6 digitos" }),
+    (0, class_validator_1.MaxLength)(6, { message: "El codigo TOTP debe tener 6 digitos" }),
+    __metadata("design:type", String)
+], CashboxOverrideDto.prototype, "totpCode", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ description: "Justificacion del override del OWNER", example: "Error de conteo verificado con camara de seguridad" }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CashboxOverrideDto.prototype, "overrideReason", void 0);
 class CreateTransactionDto {
     type;
     amount;

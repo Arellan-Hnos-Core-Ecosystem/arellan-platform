@@ -14,13 +14,13 @@ async function bootstrap() {
 
   app.use(helmet())
 
+  const defaultCorsOrigins =
+    config.get("NODE_ENV") === "production"
+      ? "https://app.arellan.pe"
+      : "http://localhost:3002,http://localhost:3003,http://localhost:3004,http://localhost:3005,http://localhost:3006,http://localhost:3007"
+
   app.enableCors({
-    origin:
-      config.get("NODE_ENV") === "production"
-        ? config
-            .get<string>("CORS_ORIGINS", "https://app.arellan.pe")
-            .split(",")
-        : true,
+    origin: config.get<string>("CORS_ORIGINS", defaultCorsOrigins).split(","),
     credentials: true,
   })
 
@@ -59,6 +59,7 @@ async function bootstrap() {
     .addTag("Commissions", "Comisiones")
     .addTag("Audit", "Auditoria y logs")
     .addTag("Settings", "Configuraciones")
+    .addTag("IoT", "Integracion con hardware (arellan-hardware-iot): biometria ZKTeco y camaras ONVIF")
     .addServer("http://localhost:3001", "Desarrollo Local")
     .build()
 

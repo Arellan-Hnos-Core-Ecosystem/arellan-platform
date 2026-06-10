@@ -9,7 +9,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.MechanicProgressDto = exports.VehicleCheckinDto = exports.RequestPartsDto = exports.RequestPartsItemDto = exports.OrderFilterDto = exports.ApplyDiscountDto = exports.AssignMechanicDto = exports.UpdateStatusDto = exports.UpdateOrderDto = exports.CreateOrderDto = void 0;
+exports.MechanicProgressDto = exports.CompleteWorkOrderDto = exports.DeliverOrderDto = exports.RejectQuoteDto = exports.ApproveQuoteDto = exports.SendQuoteDto = exports.CameraCaptureDto = exports.VehicleCheckinDto = exports.RequestPartsDto = exports.RequestPartsItemDto = exports.OrderFilterDto = exports.ApplyDiscountDto = exports.AssignMechanicDto = exports.UpdateStatusDto = exports.UpdateOrderDto = exports.CreateOrderDto = void 0;
 const class_validator_1 = require("class-validator");
 const class_transformer_1 = require("class-transformer");
 const client_1 = require("@prisma/client");
@@ -250,6 +250,121 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], VehicleCheckinDto.prototype, "photoPositions", void 0);
+class CameraCaptureDto {
+    position;
+    cameraId;
+    imageBase64;
+    mimeType;
+}
+exports.CameraCaptureDto = CameraCaptureDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({ description: "Posicion de check-in vinculada (Regla Anti-Fraude #8)", enum: ["FRONT", "BACK", "LEFT", "RIGHT", "DASHBOARD"], example: "FRONT" }),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsNotEmpty)(),
+    __metadata("design:type", String)
+], CameraCaptureDto.prototype, "position", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ description: "Identificador de la camara ONVIF de origen", example: "CAM-BAHIA-01" }),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsNotEmpty)(),
+    __metadata("design:type", String)
+], CameraCaptureDto.prototype, "cameraId", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ description: "Imagen capturada (snapshot ONVIF) en base64, sin prefijo data URI" }),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsNotEmpty)(),
+    __metadata("design:type", String)
+], CameraCaptureDto.prototype, "imageBase64", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ description: "MIME type de la imagen", example: "image/jpeg" }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CameraCaptureDto.prototype, "mimeType", void 0);
+class SendQuoteDto {
+    laborCost;
+    partsCost;
+    validDays;
+}
+exports.SendQuoteDto = SendQuoteDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({ description: "Costo de mano de obra en Soles (debe ser > 0)", example: 150.0 }),
+    (0, class_validator_1.IsNumber)({ maxDecimalPlaces: 2 }),
+    (0, class_validator_1.Min)(0.01, { message: "laborCost debe ser mayor a cero" }),
+    __metadata("design:type", Number)
+], SendQuoteDto.prototype, "laborCost", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ description: "Costo total de repuestos en Soles (puede ser 0 si no hay repuestos)", example: 450.0 }),
+    (0, class_validator_1.IsNumber)({ maxDecimalPlaces: 2 }),
+    (0, class_validator_1.Min)(0, { message: "partsCost no puede ser negativo" }),
+    __metadata("design:type", Number)
+], SendQuoteDto.prototype, "partsCost", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ description: "Dias de validez de la cotizacion (default: 3)", example: 3, minimum: 1, maximum: 30 }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(1),
+    (0, class_validator_1.Max)(30),
+    __metadata("design:type", Number)
+], SendQuoteDto.prototype, "validDays", void 0);
+class ApproveQuoteDto {
+    clientSignature;
+}
+exports.ApproveQuoteDto = ApproveQuoteDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({ description: "Token de firma digital del cliente (Base64 o confirmacion con timestamp)", example: "APPROVED-uuid-1749380000000" }),
+    (0, class_validator_1.IsString)({ message: "clientSignature es requerida" }),
+    __metadata("design:type", String)
+], ApproveQuoteDto.prototype, "clientSignature", void 0);
+class RejectQuoteDto {
+    reason;
+}
+exports.RejectQuoteDto = RejectQuoteDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({ description: "Motivo del rechazo de la cotizacion por el cliente", example: "El presupuesto supera mi limite" }),
+    (0, class_validator_1.IsString)({ message: "reason es requerida" }),
+    __metadata("design:type", String)
+], RejectQuoteDto.prototype, "reason", void 0);
+class DeliverOrderDto {
+    clientSignature;
+    paymentMethod;
+}
+exports.DeliverOrderDto = DeliverOrderDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({ description: "Firma digital del cliente (conformidad de entrega)", example: "CONF-cliente-uuid-1717800000000" }),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MinLength)(5),
+    __metadata("design:type", String)
+], DeliverOrderDto.prototype, "clientSignature", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ description: "Metodo de pago del cliente", enum: ["CASH", "YAPE", "PLIN", "CARD", "TRANSFER"], example: "YAPE" }),
+    (0, class_validator_1.IsIn)(["CASH", "YAPE", "PLIN", "CARD", "TRANSFER"]),
+    __metadata("design:type", String)
+], DeliverOrderDto.prototype, "paymentMethod", void 0);
+class CompleteWorkOrderDto {
+    odometerOut;
+    technicalNotes;
+    requestedStatus;
+}
+exports.CompleteWorkOrderDto = CompleteWorkOrderDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({ description: "Kilometraje de salida del vehiculo (debe ser >= odometro de ingreso)", example: 85120 }),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(0, { message: "El odometro de salida no puede ser negativo" }),
+    __metadata("design:type", Number)
+], CompleteWorkOrderDto.prototype, "odometerOut", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ description: "Notas tecnicas del trabajo ejecutado", example: "Cambio de pastillas y discos delanteros, purgado de frenos completado" }),
+    (0, class_validator_1.IsString)({ message: "Las notas tecnicas son requeridas" }),
+    (0, class_validator_1.MinLength)(5, { message: "Las notas tecnicas deben tener al menos 5 caracteres" }),
+    __metadata("design:type", String)
+], CompleteWorkOrderDto.prototype, "technicalNotes", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ description: "Estado solicitado al finalizar (ignorado y forzado a IN_REVIEW si el rol es TRAINEE)", enum: ["READY", "IN_REVIEW"], example: "READY" }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsIn)(["READY", "IN_REVIEW"], { message: "requestedStatus debe ser READY o IN_REVIEW" }),
+    __metadata("design:type", String)
+], CompleteWorkOrderDto.prototype, "requestedStatus", void 0);
 class MechanicProgressDto {
     progressPercent;
     partsInstalled;

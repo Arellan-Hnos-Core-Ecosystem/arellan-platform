@@ -2,8 +2,13 @@ import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Us
 import { FileInterceptor, FilesInterceptor } from "@nestjs/platform-express"
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam, ApiConsumes, ApiBody } from "@nestjs/swagger"
 import { OrdersService } from "./orders.service"
+import { SendOrderQuoteUseCase } from "./use-cases/send-order-quote.use-case"
+import { ApproveQuoteUseCase } from "./use-cases/approve-quote.use-case"
+import { DispatchPartsToOrderUseCase } from "./use-cases/dispatch-parts-to-order.use-case"
+import { DeliverVehicleUseCase } from "./use-cases/deliver-vehicle.use-case"
 import { AuthUser } from "../auth/auth.service"
-import { CreateOrderDto, UpdateOrderDto, UpdateStatusDto, OrderFilterDto, ApplyDiscountDto, RequestPartsDto, MechanicProgressDto, VehicleCheckinDto } from "./dto/orders.dto"
+import { CreateOrderDto, UpdateOrderDto, UpdateStatusDto, OrderFilterDto, ApplyDiscountDto, RequestPartsDto, MechanicProgressDto, VehicleCheckinDto, SendQuoteDto, ApproveQuoteDto, RejectQuoteDto, DeliverOrderDto, CompleteWorkOrderDto, RequestCameraCaptureDto } from "./dto/orders.dto"
+import { CompleteWorkOrderUseCase } from "./use-cases/complete-work-order.use-case"
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard"
 import { RolesGuard } from "../../common/guards/roles.guard"
 import { DataMaskingInterceptor } from "../../common/interceptors/data-masking.interceptor"
@@ -16,7 +21,14 @@ import { UserRole, OrderStatus } from "@prisma/client"
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth("access-token")
 export class OrdersController {
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(
+    private readonly ordersService: OrdersService,
+    private readonly sendOrderQuoteUseCase: SendOrderQuoteUseCase,
+    private readonly approveQuoteUseCase: ApproveQuoteUseCase,
+    private readonly dispatchPartsUseCase: DispatchPartsToOrderUseCase,
+    private readonly deliverVehicleUseCase: DeliverVehicleUseCase,
+    private readonly completeWorkOrderUseCase: CompleteWorkOrderUseCase,
+  ) {}
 
   @Get()
   @ApiOperation({
@@ -182,7 +194,11 @@ export class OrdersController {
   @ApiResponse({ status: 404, description: "OT o item no encontrado" })
   @ApiResponse({ status: 409, description: "Stock insuficiente u OT finalizada" })
   async requestParts(@Param("id") id: string, @Body() dto: RequestPartsDto, @CurrentUser() user: AuthUser) {
-    return this.ordersService.requestParts(id, dto, user.id, user.name)
+    return this.dispatchPartsUseCase.execute(id, {
+      items: dto.items,
+      requestedBy: user.id,
+      requestedByName: user.name,
+    })
   }
 
   @Post(":id/progress")
@@ -199,6 +215,28 @@ export class OrdersController {
     return this.ordersService.reportProgress(id, dto, user.id, user.name)
   }
 
+  @Post(":id/complete")
+  @Roles(UserRole.MECHANIC, UserRole.TRAINEE, UserRole.ADMIN, UserRole.OWNER)
+  @UseGuards(RolesGuard)
+  @ApiOperation({
+    summary: "Finalizar trabajo de una OT (cierre de tarea del mecanico)",
+    description: "Registra el odometro de salida y notas tecnicas. Aplica segregacion de funciones QA: si el usuario es TRAINEE, la OT se envia obligatoriamente a IN_REVIEW para inspeccion del Jefe de Taller, sin importar el estado solicitado. Dispara evento de auditoria de eficiencia y notificacion en tiempo real a room:management cuando la OT requiere revision.",
+  })
+  @ApiParam({ name: "id", description: "ID de la OT (UUID v4)" })
+  @ApiResponse({ status: 201, description: "Trabajo finalizado: OT movida a READY o IN_REVIEW segun rol" })
+  @ApiResponse({ status: 404, description: "OT no encontrada" })
+  @ApiResponse({ status: 409, description: "La OT no esta en estado IN_PROGRESS o el odometro de salida es invalido" })
+  async completeWorkOrder(@Param("id") id: string, @Body() dto: CompleteWorkOrderDto, @CurrentUser() user: AuthUser) {
+    return this.completeWorkOrderUseCase.execute(id, {
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      odometerOut: dto.odometerOut,
+      technicalNotes: dto.technicalNotes,
+      requestedStatus: dto.requestedStatus ?? "READY",
+    })
+  }
+
   @Delete(":id/photos/:photoId")
   @Roles(UserRole.MECHANIC, UserRole.TRAINEE, UserRole.ADMIN, UserRole.OWNER)
   @UseGuards(RolesGuard)
@@ -212,6 +250,79 @@ export class OrdersController {
   @ApiResponse({ status: 404, description: "OT o foto no encontrada" })
   async deletePhoto(@Param("id") id: string, @Param("photoId") photoId: string, @CurrentUser() user: AuthUser) {
     return this.ordersService.deletePhoto(id, photoId, user.id, user.name)
+  }
+
+  @Post(":id/quote")
+  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @ApiOperation({
+    summary: "Emitir cotización al cliente",
+    description: "Calcula costos finales (laborCost + partsCost + customsCost si hay importados), valida invariante Anti-Fraude, crea Quote con QuoteStatus.SENT, genera invoice draft y encola notificación BullMQ al cliente.",
+  })
+  @ApiParam({ name: "id", description: "ID de la OT (UUID v4)" })
+  @ApiResponse({ status: 201, description: "Cotización emitida y notificación encolada" })
+  @ApiResponse({ status: 400, description: "Invariante de costos violada o partes importadas sin customsCost" })
+  @ApiResponse({ status: 409, description: "OT no está en estado BUDGETED" })
+  sendQuote(@Param("id") id: string, @Body() dto: SendQuoteDto, @CurrentUser() user: AuthUser) {
+    return this.sendOrderQuoteUseCase.execute(id, {
+      laborCost: dto.laborCost,
+      partsCost: dto.partsCost,
+      validDays: dto.validDays,
+      requestedBy: user.id,
+    })
+  }
+
+  @Post(":id/quote/approve")
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.CLIENT)
+  @UseGuards(RolesGuard)
+  @ApiOperation({
+    summary: "Aprobar cotización (aceptación digital del cliente)",
+    description: "Registra la firma digital del cliente, transiciona la OT de BUDGETED a IN_PROGRESS en $transaction atómica, reserva inventario y emite WebSocket a tablets de mecánicos.",
+  })
+  @ApiParam({ name: "id", description: "ID de la OT (UUID v4)" })
+  @ApiResponse({ status: 200, description: "Cotización aprobada, OT en IN_PROGRESS" })
+  @ApiResponse({ status: 409, description: "Cotización no está en estado SENT" })
+  approveQuote(@Param("id") id: string, @Body() dto: ApproveQuoteDto, @CurrentUser() user: AuthUser) {
+    return this.approveQuoteUseCase.execute(id, {
+      clientSignature: dto.clientSignature,
+      approverId: user.id,
+    })
+  }
+
+  @Post(":id/quote/reject")
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.CLIENT)
+  @UseGuards(RolesGuard)
+  @ApiOperation({
+    summary: "Rechazar cotización",
+    description: "El cliente rechaza la cotización. OT permanece en BUDGETED para revisión de costos.",
+  })
+  @ApiParam({ name: "id", description: "ID de la OT (UUID v4)" })
+  @ApiResponse({ status: 200, description: "Cotización rechazada" })
+  rejectQuote(@Param("id") id: string, @Body() dto: RejectQuoteDto, @CurrentUser() user: AuthUser) {
+    return this.approveQuoteUseCase.reject(id, {
+      reason: dto.reason,
+      rejectedBy: user.id,
+    })
+  }
+
+  @Post(":id/deliver")
+  @Roles(UserRole.ADMIN, UserRole.OWNER)
+  @UseGuards(RolesGuard)
+  @ApiOperation({
+    summary: "Registrar entrega de vehículo al cliente",
+    description: "Transiciona la OT de READY a DELIVERED en $transaction atómica. Verifica caja abierta, crea FinancialTransaction (PAYMENT) vinculada a la sesión de caja activa y registra firma de conformidad.",
+  })
+  @ApiParam({ name: "id", description: "ID de la OT (UUID v4)" })
+  @ApiResponse({ status: 200, description: "Vehículo entregado, transacción registrada" })
+  @ApiResponse({ status: 400, description: "No hay caja abierta hoy" })
+  @ApiResponse({ status: 409, description: "OT no está en estado READY" })
+  deliverVehicle(@Param("id") id: string, @Body() dto: DeliverOrderDto, @CurrentUser() user: AuthUser) {
+    return this.deliverVehicleUseCase.execute(id, {
+      clientSignature: dto.clientSignature,
+      deliveredBy: user.id,
+      deliveredByName: user.name,
+      paymentMethod: dto.paymentMethod as any,
+    })
   }
 
   @Post("checkin")
@@ -241,5 +352,21 @@ export class OrdersController {
     @CurrentUser() user?: AuthUser,
   ) {
     return this.ordersService.vehicleCheckin(body, photos ?? [], user?.id ?? "system", user?.name ?? "Sistema")
+  }
+
+  @Post(":id/photos/camera-capture")
+  @Roles(UserRole.MECHANIC, UserRole.TRAINEE, UserRole.ADMIN, UserRole.OWNER)
+  @UseGuards(RolesGuard)
+  @ApiOperation({
+    summary: "Disparar captura ONVIF de la camara de bahia (Anti-Fraude #8)",
+    description: "Ordena al bridge arellan-hardware-iot (puerto 3007) tomar un snapshot ONVIF de la camara de la bahia de check-in y vincularlo a la posicion indicada de la OT, como evidencia adicional a las fotos manuales de la tablet.",
+  })
+  @ApiParam({ name: "id", description: "ID de la OT (UUID v4)" })
+  @ApiResponse({ status: 201, description: "Captura solicitada (entregada o pendiente si el bridge no responde)" })
+  @ApiResponse({ status: 400, description: "Posicion invalida" })
+  @ApiResponse({ status: 401, description: "JWT invalido" })
+  @ApiResponse({ status: 404, description: "OT no encontrada" })
+  async requestCameraCapture(@Param("id") id: string, @Body() dto: RequestCameraCaptureDto) {
+    return this.ordersService.requestCameraCapture(id, dto.position)
   }
 }

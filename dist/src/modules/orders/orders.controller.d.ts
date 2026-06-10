@@ -1,9 +1,19 @@
 import { OrdersService } from "./orders.service";
+import { SendOrderQuoteUseCase } from "./use-cases/send-order-quote.use-case";
+import { ApproveQuoteUseCase } from "./use-cases/approve-quote.use-case";
+import { DispatchPartsToOrderUseCase } from "./use-cases/dispatch-parts-to-order.use-case";
+import { DeliverVehicleUseCase } from "./use-cases/deliver-vehicle.use-case";
 import { AuthUser } from "../auth/auth.service";
-import { CreateOrderDto, UpdateOrderDto, UpdateStatusDto, OrderFilterDto, ApplyDiscountDto, RequestPartsDto, MechanicProgressDto, VehicleCheckinDto } from "./dto/orders.dto";
+import { CreateOrderDto, UpdateOrderDto, UpdateStatusDto, OrderFilterDto, ApplyDiscountDto, RequestPartsDto, MechanicProgressDto, VehicleCheckinDto, SendQuoteDto, ApproveQuoteDto, RejectQuoteDto, DeliverOrderDto, CompleteWorkOrderDto } from "./dto/orders.dto";
+import { CompleteWorkOrderUseCase } from "./use-cases/complete-work-order.use-case";
 export declare class OrdersController {
     private readonly ordersService;
-    constructor(ordersService: OrdersService);
+    private readonly sendOrderQuoteUseCase;
+    private readonly approveQuoteUseCase;
+    private readonly dispatchPartsUseCase;
+    private readonly deliverVehicleUseCase;
+    private readonly completeWorkOrderUseCase;
+    constructor(ordersService: OrdersService, sendOrderQuoteUseCase: SendOrderQuoteUseCase, approveQuoteUseCase: ApproveQuoteUseCase, dispatchPartsUseCase: DispatchPartsToOrderUseCase, deliverVehicleUseCase: DeliverVehicleUseCase, completeWorkOrderUseCase: CompleteWorkOrderUseCase);
     findAll(filters: OrderFilterDto): Promise<import("./dto/orders.dto").PaginatedResult<unknown>>;
     findMyOrders(user: AuthUser, filters: OrderFilterDto): Promise<import("./dto/orders.dto").PaginatedResult<unknown>>;
     getSummaryStats(): Promise<{
@@ -20,12 +30,11 @@ export declare class OrdersController {
     findOne(id: string): Promise<{
         vehicle: {
             id: string;
-            clientId: string;
             status: import(".prisma/client").$Enums.VehicleStatus;
             photos: string[];
             createdAt: Date;
             updatedAt: Date;
-            notes: string | null;
+            clientId: string;
             plate: string;
             brand: string;
             model: string;
@@ -37,10 +46,11 @@ export declare class OrdersController {
             mileage: number | null;
             fuelType: import(".prisma/client").$Enums.FuelType;
             transmission: import(".prisma/client").$Enums.TransmissionType;
+            notes: string | null;
         };
         client: {
-            type: import(".prisma/client").$Enums.ClientType;
             id: string;
+            type: import(".prisma/client").$Enums.ClientType;
             createdAt: Date;
             updatedAt: Date;
             email: string | null;
@@ -116,20 +126,37 @@ export declare class OrdersController {
             userId: string;
         }[];
         payments: {
-            amount: import("@prisma/client/runtime/library").Decimal;
             id: string;
             method: import(".prisma/client").$Enums.PaymentMethod;
+            amount: import("@prisma/client/runtime/library").Decimal;
+            isPersonalYape: boolean;
+            yapeAccount: string | null;
             paidAt: Date;
         }[];
+        quote: {
+            number: string;
+            id: string;
+            status: import(".prisma/client").$Enums.QuoteStatus;
+            tax: import("@prisma/client/runtime/library").Decimal;
+            createdBy: string;
+            createdAt: Date;
+            updatedAt: Date;
+            clientId: string;
+            notes: string | null;
+            workOrderId: string | null;
+            validUntil: Date;
+            subtotal: import("@prisma/client/runtime/library").Decimal;
+            total: import("@prisma/client/runtime/library").Decimal;
+            approvedAt: Date | null;
+            rejectedAt: Date | null;
+            rejectionReason: string | null;
+        } | null;
     } & {
         number: string;
-        type: import(".prisma/client").$Enums.ServiceType;
         id: string;
-        vehicleId: string;
-        clientId: string;
-        mechanicId: string | null;
         status: import(".prisma/client").$Enums.OrderStatus;
         priority: import(".prisma/client").$Enums.Priority;
+        type: import(".prisma/client").$Enums.ServiceType;
         description: string;
         diagnosis: string | null;
         recommendation: string | null;
@@ -159,16 +186,18 @@ export declare class OrdersController {
         updatedBy: string | null;
         createdAt: Date;
         updatedAt: Date;
+        vehicleId: string;
+        clientId: string;
+        mechanicId: string | null;
     }>;
     create(dto: CreateOrderDto, user: AuthUser): Promise<{
         vehicle: {
             id: string;
-            clientId: string;
             status: import(".prisma/client").$Enums.VehicleStatus;
             photos: string[];
             createdAt: Date;
             updatedAt: Date;
-            notes: string | null;
+            clientId: string;
             plate: string;
             brand: string;
             model: string;
@@ -180,10 +209,11 @@ export declare class OrdersController {
             mileage: number | null;
             fuelType: import(".prisma/client").$Enums.FuelType;
             transmission: import(".prisma/client").$Enums.TransmissionType;
+            notes: string | null;
         };
         client: {
-            type: import(".prisma/client").$Enums.ClientType;
             id: string;
+            type: import(".prisma/client").$Enums.ClientType;
             createdAt: Date;
             updatedAt: Date;
             email: string | null;
@@ -212,13 +242,10 @@ export declare class OrdersController {
         } | null;
     } & {
         number: string;
-        type: import(".prisma/client").$Enums.ServiceType;
         id: string;
-        vehicleId: string;
-        clientId: string;
-        mechanicId: string | null;
         status: import(".prisma/client").$Enums.OrderStatus;
         priority: import(".prisma/client").$Enums.Priority;
+        type: import(".prisma/client").$Enums.ServiceType;
         description: string;
         diagnosis: string | null;
         recommendation: string | null;
@@ -248,16 +275,18 @@ export declare class OrdersController {
         updatedBy: string | null;
         createdAt: Date;
         updatedAt: Date;
+        vehicleId: string;
+        clientId: string;
+        mechanicId: string | null;
     }>;
     update(id: string, dto: UpdateOrderDto): Promise<{
         vehicle: {
             id: string;
-            clientId: string;
             status: import(".prisma/client").$Enums.VehicleStatus;
             photos: string[];
             createdAt: Date;
             updatedAt: Date;
-            notes: string | null;
+            clientId: string;
             plate: string;
             brand: string;
             model: string;
@@ -269,10 +298,11 @@ export declare class OrdersController {
             mileage: number | null;
             fuelType: import(".prisma/client").$Enums.FuelType;
             transmission: import(".prisma/client").$Enums.TransmissionType;
+            notes: string | null;
         };
         client: {
-            type: import(".prisma/client").$Enums.ClientType;
             id: string;
+            type: import(".prisma/client").$Enums.ClientType;
             createdAt: Date;
             updatedAt: Date;
             email: string | null;
@@ -301,13 +331,10 @@ export declare class OrdersController {
         } | null;
     } & {
         number: string;
-        type: import(".prisma/client").$Enums.ServiceType;
         id: string;
-        vehicleId: string;
-        clientId: string;
-        mechanicId: string | null;
         status: import(".prisma/client").$Enums.OrderStatus;
         priority: import(".prisma/client").$Enums.Priority;
+        type: import(".prisma/client").$Enums.ServiceType;
         description: string;
         diagnosis: string | null;
         recommendation: string | null;
@@ -337,16 +364,18 @@ export declare class OrdersController {
         updatedBy: string | null;
         createdAt: Date;
         updatedAt: Date;
+        vehicleId: string;
+        clientId: string;
+        mechanicId: string | null;
     }>;
     updateStatus(id: string, dto: UpdateStatusDto, user: AuthUser): Promise<{
         vehicle: {
             id: string;
-            clientId: string;
             status: import(".prisma/client").$Enums.VehicleStatus;
             photos: string[];
             createdAt: Date;
             updatedAt: Date;
-            notes: string | null;
+            clientId: string;
             plate: string;
             brand: string;
             model: string;
@@ -358,10 +387,11 @@ export declare class OrdersController {
             mileage: number | null;
             fuelType: import(".prisma/client").$Enums.FuelType;
             transmission: import(".prisma/client").$Enums.TransmissionType;
+            notes: string | null;
         };
         client: {
-            type: import(".prisma/client").$Enums.ClientType;
             id: string;
+            type: import(".prisma/client").$Enums.ClientType;
             createdAt: Date;
             updatedAt: Date;
             email: string | null;
@@ -390,13 +420,10 @@ export declare class OrdersController {
         } | null;
     } & {
         number: string;
-        type: import(".prisma/client").$Enums.ServiceType;
         id: string;
-        vehicleId: string;
-        clientId: string;
-        mechanicId: string | null;
         status: import(".prisma/client").$Enums.OrderStatus;
         priority: import(".prisma/client").$Enums.Priority;
+        type: import(".prisma/client").$Enums.ServiceType;
         description: string;
         diagnosis: string | null;
         recommendation: string | null;
@@ -426,16 +453,18 @@ export declare class OrdersController {
         updatedBy: string | null;
         createdAt: Date;
         updatedAt: Date;
+        vehicleId: string;
+        clientId: string;
+        mechanicId: string | null;
     }>;
     remove(id: string): Promise<{
         vehicle: {
             id: string;
-            clientId: string;
             status: import(".prisma/client").$Enums.VehicleStatus;
             photos: string[];
             createdAt: Date;
             updatedAt: Date;
-            notes: string | null;
+            clientId: string;
             plate: string;
             brand: string;
             model: string;
@@ -447,10 +476,11 @@ export declare class OrdersController {
             mileage: number | null;
             fuelType: import(".prisma/client").$Enums.FuelType;
             transmission: import(".prisma/client").$Enums.TransmissionType;
+            notes: string | null;
         };
         client: {
-            type: import(".prisma/client").$Enums.ClientType;
             id: string;
+            type: import(".prisma/client").$Enums.ClientType;
             createdAt: Date;
             updatedAt: Date;
             email: string | null;
@@ -479,13 +509,10 @@ export declare class OrdersController {
         } | null;
     } & {
         number: string;
-        type: import(".prisma/client").$Enums.ServiceType;
         id: string;
-        vehicleId: string;
-        clientId: string;
-        mechanicId: string | null;
         status: import(".prisma/client").$Enums.OrderStatus;
         priority: import(".prisma/client").$Enums.Priority;
+        type: import(".prisma/client").$Enums.ServiceType;
         description: string;
         diagnosis: string | null;
         recommendation: string | null;
@@ -515,16 +542,16 @@ export declare class OrdersController {
         updatedBy: string | null;
         createdAt: Date;
         updatedAt: Date;
+        vehicleId: string;
+        clientId: string;
+        mechanicId: string | null;
     }>;
     applyDiscount(orderId: string, dto: ApplyDiscountDto, user: AuthUser): Promise<{
         number: string;
-        type: import(".prisma/client").$Enums.ServiceType;
         id: string;
-        vehicleId: string;
-        clientId: string;
-        mechanicId: string | null;
         status: import(".prisma/client").$Enums.OrderStatus;
         priority: import(".prisma/client").$Enums.Priority;
+        type: import(".prisma/client").$Enums.ServiceType;
         description: string;
         diagnosis: string | null;
         recommendation: string | null;
@@ -554,6 +581,9 @@ export declare class OrdersController {
         updatedBy: string | null;
         createdAt: Date;
         updatedAt: Date;
+        vehicleId: string;
+        clientId: string;
+        mechanicId: string | null;
     } | {
         status: string;
         message: string;
@@ -565,7 +595,15 @@ export declare class OrdersController {
     }>;
     requestParts(id: string, dto: RequestPartsDto, user: AuthUser): Promise<{
         success: boolean;
-        parts: unknown[];
+        parts: {
+            id: string;
+            createdAt: Date;
+            orderId: string;
+            itemId: string;
+            quantity: number;
+            unitPrice: import("@prisma/client/runtime/library").Decimal;
+        }[];
+        lowStockAlerts: number;
     }>;
     reportProgress(id: string, dto: MechanicProgressDto, user: AuthUser): Promise<{
         success: boolean;
@@ -579,8 +617,47 @@ export declare class OrdersController {
             userId: string;
         };
     }>;
+    completeWorkOrder(id: string, dto: CompleteWorkOrderDto, user: AuthUser): Promise<{
+        success: boolean;
+        orderId: string;
+        orderNumber: string;
+        previousStatus: "IN_PROGRESS";
+        newStatus: import(".prisma/client").$Enums.OrderStatus;
+        odometerOut: number;
+        completedAt: string;
+    }>;
     deletePhoto(id: string, photoId: string, user: AuthUser): Promise<{
         success: boolean;
+    }>;
+    sendQuote(id: string, dto: SendQuoteDto, user: AuthUser): Promise<{
+        success: boolean;
+        quoteId: string;
+        quoteNumber: string;
+        total: number;
+        customsCost: number;
+        invoiceId: string;
+    }>;
+    approveQuote(id: string, dto: ApproveQuoteDto, user: AuthUser): Promise<{
+        success: boolean;
+        orderId: string;
+        orderNumber: string;
+        newStatus: import(".prisma/client").$Enums.OrderStatus;
+        quoteId: string;
+        approvedAt: string;
+    }>;
+    rejectQuote(id: string, dto: RejectQuoteDto, user: AuthUser): Promise<{
+        success: boolean;
+        orderId: string;
+        quoteId: string;
+        status: "REJECTED";
+    }>;
+    deliverVehicle(id: string, dto: DeliverOrderDto, user: AuthUser): Promise<{
+        success: boolean;
+        orderId: string;
+        orderNumber: string;
+        newStatus: import(".prisma/client").$Enums.OrderStatus;
+        deliveredAt: string;
+        transactionSessionId: string;
     }>;
     vehicleCheckin(body: VehicleCheckinDto, photos?: Express.Multer.File[], user?: AuthUser): Promise<{
         success: boolean;

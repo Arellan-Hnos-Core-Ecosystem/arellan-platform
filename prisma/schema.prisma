@@ -37,6 +37,9 @@ enum OrderStatus {
 enum CashboxStatus {
   OPEN
   CLOSED
+  CLOSED_NORMAL
+  CLOSED_WITH_DISCREPANCY
+  BLOCKED
 }
 
 enum TransactionType {
@@ -688,10 +691,11 @@ model CashboxSession {
   closingBalance Decimal?               @db.Decimal(12, 2)
   actualCash     Decimal?               @db.Decimal(12, 2)
   discrepancy    Decimal?               @db.Decimal(12, 2)
-  status         CashboxStatus          @default(OPEN)
-  notes          String?
-  openedAt       DateTime               @default(now())
-  closedAt       DateTime?
+  status            CashboxStatus          @default(OPEN)
+  notes             String?
+  justificationText String?
+  openedAt          DateTime               @default(now())
+  closedAt          DateTime?
 
   transactions   FinancialTransaction[]
   openedBy       Account                @relation("OpenedBy", fields: [openedById], references: [id])

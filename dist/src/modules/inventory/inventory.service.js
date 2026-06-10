@@ -251,12 +251,11 @@ let InventoryService = InventoryService_1 = class InventoryService {
         });
         if (!order)
             throw new common_1.NotFoundException(`OT ${workOrderId} no encontrada`);
-        const ALLOWED_STATUSES = ["RECEIVED", "IN_DIAGNOSIS", "BUDGETED", "IN_PROGRESS", "IN_REVIEW"];
-        if (!ALLOWED_STATUSES.includes(order.status)) {
+        if (order.status !== "IN_PROGRESS") {
             throw new common_1.HttpException({
                 statusCode: 422,
-                error: "INVENTORY_ORDER_INVALID_STATUS",
-                message: `La OT ${order.number} esta en estado ${order.status} y no permite salida de inventario.`,
+                error: "INVENTORY_NO_ACTIVE_ORDER",
+                message: `Solo se puede retirar inventario de OT en estado IN_PROGRESS. OT ${order.number} está en estado ${order.status}.`,
             }, common_1.HttpStatus.UNPROCESSABLE_ENTITY);
         }
         const result = await this.prisma.$transaction(async (tx) => {

@@ -10,14 +10,15 @@ exports.AttendanceModule = void 0;
 const common_1 = require("@nestjs/common");
 const attendance_controller_1 = require("./attendance.controller");
 const attendance_service_1 = require("./attendance.service");
+const process_biometric_attendance_use_case_1 = require("./use-cases/process-biometric-attendance.use-case");
 let AttendanceModule = class AttendanceModule {
 };
 exports.AttendanceModule = AttendanceModule;
 exports.AttendanceModule = AttendanceModule = __decorate([
     (0, common_1.Module)({
         controllers: [attendance_controller_1.AttendanceController],
-        providers: [attendance_service_1.AttendanceService],
-        exports: [attendance_service_1.AttendanceService],
+        providers: [attendance_service_1.AttendanceService, process_biometric_attendance_use_case_1.ProcessBiometricAttendanceUseCase],
+        exports: [attendance_service_1.AttendanceService, process_biometric_attendance_use_case_1.ProcessBiometricAttendanceUseCase],
     })
 ], AttendanceModule);
 //# sourceMappingURL=attendance.module.js.map

@@ -9,7 +9,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.VerifyAttendanceDto = exports.CheckOutDto = exports.CheckInDto = exports.AttendanceFilterDto = void 0;
+exports.VerifyAttendanceDto = exports.BiometricCheckInDto = exports.CheckOutDto = exports.CheckInDto = exports.AttendanceFilterDto = void 0;
 const class_validator_1 = require("class-validator");
 const class_transformer_1 = require("class-transformer");
 const client_1 = require("@prisma/client");
@@ -96,6 +96,35 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CheckOutDto.prototype, "notes", void 0);
+class BiometricCheckInDto {
+    dni;
+    timestamp;
+    deviceSN;
+    verifyMethod;
+}
+exports.BiometricCheckInDto = BiometricCheckInDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({ description: "DNI del empleado leido por el dispositivo ZKTeco", example: "45678912" }),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsNotEmpty)(),
+    __metadata("design:type", String)
+], BiometricCheckInDto.prototype, "dni", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ description: "Timestamp exacto del marcado, normalizado a ISO-8601 por el bridge", example: "2026-06-10T08:17:00.000Z" }),
+    (0, class_validator_1.IsDateString)(),
+    __metadata("design:type", String)
+], BiometricCheckInDto.prototype, "timestamp", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ description: "Numero de serie del dispositivo ZKTeco de origen", example: "ZKTECO123456" }),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsNotEmpty)(),
+    __metadata("design:type", String)
+], BiometricCheckInDto.prototype, "deviceSN", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ description: "Metodo de verificacion: 1=huella, 4=PIN, 15=facial", example: 1 }),
+    (0, class_validator_1.IsInt)(),
+    __metadata("design:type", Number)
+], BiometricCheckInDto.prototype, "verifyMethod", void 0);
 class VerifyAttendanceDto {
     personnelId;
     date;

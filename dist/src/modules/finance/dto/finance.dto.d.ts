@@ -5,6 +5,16 @@ export declare class OpenCashboxDto {
 export declare class CloseCashboxDto {
     actualCash: number;
     notes?: string;
+    justificationText?: string;
+}
+export declare class DeliverVehicleDto {
+    clientSignature: string;
+    paymentMethod: string;
+}
+export declare class CashboxOverrideDto {
+    sessionId: string;
+    totpCode: string;
+    overrideReason?: string;
 }
 export declare class CreateTransactionDto {
     type: TransactionType;

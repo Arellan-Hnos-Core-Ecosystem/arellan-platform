@@ -95,6 +95,28 @@ export class WorkOrder {
     return new WorkOrder({ ...this.props, discount, updatedAt: new Date() });
   }
 
+  assertCanSendQuote(): void {
+    if (this.props.laborCost.amount <= 0 && this.props.partsCost.amount <= 0) {
+      throw new Error(
+        "Invariante Anti-Fraude: no se puede emitir cotización con laborCost y partsCost ambos en cero",
+      );
+    }
+    if (!this.props.status.equals(OrderStatus.BUDGETED)) {
+      throw new Error(
+        `Invariante: solo se puede emitir cotización desde estado BUDGETED. Estado actual: ${this.props.status.value}`,
+      );
+    }
+  }
+
+  assertCanSendQuote_totalConsistency(storedTotal: number): void {
+    const computed = this.props.laborCost.amount + this.props.partsCost.amount - this.props.discount.amount;
+    if (Math.abs(storedTotal - computed) > 0.01) {
+      throw new Error(
+        `Regla Anti-Fraude: totalCost almacenado (${storedTotal.toFixed(2)}) no coincide con laborCost + partsCost - discount (${computed.toFixed(2)}). Posible manipulación de costos.`,
+      );
+    }
+  }
+
   assertCanStartProgress(hasParts: boolean): void {
     if (!hasParts) {
       throw new Error(
@@ -115,6 +137,52 @@ export class WorkOrder {
       throw new Error(
         `Regla Anti-Fraude #8: Posiciones de fotos faltantes: ${missing.join(", ")}. ` +
         `Requeridas: ${WorkOrder.REQUIRED_CHECKIN_POSITIONS.join(", ")}`,
+      );
+    }
+  }
+
+  /**
+   * Regla de Segregacion de Funciones QA (Sprint 6):
+   * - TRAINEE jamas puede enviar la OT directo a READY; siempre se redirige a IN_REVIEW
+   *   para inspeccion del Jefe de Taller.
+   * - MECHANIC/ADMIN/OWNER pueden elegir READY (auto-certificacion) o IN_REVIEW
+   *   (control de calidad cruzado opcional).
+   */
+  static resolveCompletionTarget(
+    currentStatus: OrderStatus,
+    requestedStatus: OrderStatus,
+    role: string,
+  ): OrderStatus {
+    if (!currentStatus.equals(OrderStatus.IN_PROGRESS)) {
+      throw new Error(
+        `Invariante: solo se puede finalizar el trabajo desde IN_PROGRESS. Estado actual: ${currentStatus.value}`,
+      );
+    }
+
+    let target = requestedStatus;
+
+    if (role === "TRAINEE") {
+      target = OrderStatus.IN_REVIEW;
+    } else if (!requestedStatus.equals(OrderStatus.READY) && !requestedStatus.equals(OrderStatus.IN_REVIEW)) {
+      throw new Error(
+        `Estado solicitado invalido para finalizacion: ${requestedStatus.value}. Debe ser READY o IN_REVIEW.`,
+      );
+    }
+
+    if (!currentStatus.canTransitionTo(target)) {
+      const allowed = currentStatus.allowedTransitions().join(", ") || "ninguno";
+      throw new Error(
+        `No se puede cambiar de ${currentStatus.value} a ${target.value}. Transiciones permitidas: ${allowed}`,
+      );
+    }
+
+    return target;
+  }
+
+  static assertOdometerOut(odometerIn: number | null, odometerOut: number): void {
+    if (odometerIn !== null && odometerOut < odometerIn) {
+      throw new Error(
+        `Regla Anti-Fraude: el kilometraje de salida (${odometerOut} km) no puede ser menor al kilometraje de ingreso (${odometerIn} km).`,
       );
     }
   }

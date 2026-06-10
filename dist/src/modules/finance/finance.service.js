@@ -527,6 +527,36 @@ let FinanceService = FinanceService_1 = class FinanceService {
         });
         return { status: "confirmed", payment };
     }
+    async createInvoiceDraft(params) {
+        const year = new Date().getFullYear();
+        const count = await this.prisma.invoice.count({
+            where: { number: { startsWith: `COT-${year}-` } },
+        });
+        const number = `COT-${year}-${String(count + 1).padStart(4, "0")}`;
+        const subtotal = params.laborCost + params.partsCost + params.customsCost;
+        const tax = Math.round(subtotal * 0.18 * 100) / 100;
+        const total = subtotal + tax;
+        const draft = await this.prisma.invoice.upsert({
+            where: { workOrderId: params.workOrderId },
+            update: {
+                subtotal, tax, total,
+                dueAmount: total,
+                updatedAt: new Date(),
+            },
+            create: {
+                number,
+                workOrderId: params.workOrderId,
+                clientId: params.clientId,
+                subtotal,
+                tax,
+                total,
+                dueAmount: total,
+                createdBy: params.createdBy,
+            },
+        });
+        this.logger.log(`Invoice draft ${draft.number} upserted for OT ${params.workOrderId}`);
+        return draft;
+    }
 };
 exports.FinanceService = FinanceService;
 exports.FinanceService = FinanceService = FinanceService_1 = __decorate([

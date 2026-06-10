@@ -21,7 +21,7 @@ const VALID_TRANSITIONS = {
     RECEIVED: [client_1.OrderStatus.IN_DIAGNOSIS, client_1.OrderStatus.CANCELLED],
     IN_DIAGNOSIS: [client_1.OrderStatus.BUDGETED, client_1.OrderStatus.CANCELLED],
     BUDGETED: [client_1.OrderStatus.IN_PROGRESS, client_1.OrderStatus.CANCELLED],
-    IN_PROGRESS: [client_1.OrderStatus.IN_REVIEW, client_1.OrderStatus.CANCELLED],
+    IN_PROGRESS: [client_1.OrderStatus.IN_REVIEW, client_1.OrderStatus.READY, client_1.OrderStatus.CANCELLED],
     IN_REVIEW: [client_1.OrderStatus.READY, client_1.OrderStatus.IN_PROGRESS, client_1.OrderStatus.CANCELLED],
     READY: [client_1.OrderStatus.DELIVERED, client_1.OrderStatus.CANCELLED],
     DELIVERED: [],
@@ -103,7 +103,8 @@ let OrdersService = OrdersService_1 = class OrdersService {
                 parts: { include: { item: true } },
                 statusHistory: { orderBy: { timestamp: "desc" } },
                 events: { orderBy: { createdAt: "desc" } },
-                payments: { select: { id: true, method: true, amount: true, paidAt: true } },
+                payments: { select: { id: true, method: true, amount: true, paidAt: true, isPersonalYape: true, yapeAccount: true } },
+                quote: true,
             },
         });
         if (!order)
@@ -418,8 +419,12 @@ let OrdersService = OrdersService_1 = class OrdersService {
         const order = await this.prisma.workOrder.findUnique({ where: { id: orderId } });
         if (!order)
             throw new common_1.NotFoundException("Orden de trabajo no encontrada");
-        if (["DELIVERED", "CANCELLED"].includes(order.status)) {
-            throw new common_1.ConflictException("No se pueden solicitar repuestos para una orden finalizada");
+        if (order.status !== "IN_PROGRESS") {
+            throw new common_1.HttpException({
+                statusCode: 422,
+                error: "INVENTORY_NO_ACTIVE_ORDER",
+                message: `Solo se puede solicitar repuestos para OT en estado IN_PROGRESS. OT ${order.number} está en estado ${order.status}.`,
+            }, common_1.HttpStatus.UNPROCESSABLE_ENTITY);
         }
         const results = await this.prisma.$transaction(async (tx) => {
             const created = [];
@@ -591,6 +596,7 @@ let OrdersService = OrdersService_1 = class OrdersService {
                     clientId: vehicle.clientId,
                     mechanicId: userId,
                     description: body.description || `Ingreso de vehículo ${plateNormalized}`,
+                    odometerIn: body.kilometerReading ? parseInt(body.kilometerReading, 10) || null : null,
                     createdBy: userId,
                 },
                 include: ORDER_INCLUDE,
@@ -634,6 +640,43 @@ let OrdersService = OrdersService_1 = class OrdersService {
         });
         this.logger.log(`Checkin: Vehículo ${plateNormalized} → OT ${order.number}`);
         return { success: true, orderId: order.id, orderNumber: order.number };
+    }
+    async captureCameraPhoto(orderId, dto) {
+        const order = await this.prisma.workOrder.findUnique({ where: { id: orderId } });
+        if (!order) {
+            throw new common_1.NotFoundException("OT no encontrada");
+        }
+        const position = dto.position.toUpperCase().trim();
+        const allowedPositions = work_order_entity_1.WorkOrder.REQUIRED_CHECKIN_POSITIONS;
+        if (!allowedPositions.includes(position)) {
+            throw new common_1.BadRequestException(`Posicion invalida: ${position}. Permitidas: ${allowedPositions.join(", ")}`);
+        }
+        const mimeType = dto.mimeType ?? "image/jpeg";
+        const buffer = Buffer.from(dto.imageBase64, "base64");
+        const hash = (0, crypto_1.createHash)("sha256").update(buffer).digest("hex");
+        const url = `data:${mimeType};base64,${dto.imageBase64}`;
+        const updated = await this.prisma.$transaction(async (tx) => {
+            await tx.workOrderPhoto.create({
+                data: { orderId, url, type: mimeType, hash },
+            });
+            const result = await tx.workOrder.update({
+                where: { id: orderId },
+                data: { photos: { push: url } },
+                include: ORDER_INCLUDE,
+            });
+            await tx.workOrderEvent.create({
+                data: {
+                    workOrderId: orderId,
+                    event: "ONVIF_CAMERA_CHECKIN",
+                    description: `Captura automatica ONVIF (${position}) desde camara ${dto.cameraId}`,
+                    metadata: { position, cameraId: dto.cameraId, hash, source: "ONVIF" },
+                    userId: "system",
+                },
+            });
+            return result;
+        });
+        this.logger.log(`Captura ONVIF (${position}) vinculada a OT ${order.number} desde camara ${dto.cameraId}`);
+        return { orderId, orderNumber: order.number, position, hash, photoCount: updated.photos.length };
     }
 };
 exports.OrdersService = OrdersService;

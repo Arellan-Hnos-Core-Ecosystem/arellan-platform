@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum, IsNumber, IsDateString, IsUUID, Min, Max, IsArray, ValidateNested, Matches } from "class-validator"
+import { IsString, IsOptional, IsEnum, IsNumber, IsDateString, IsUUID, Min, Max, IsArray, ValidateNested, Matches, IsIn, MinLength, IsNotEmpty } from "class-validator"
 import { Type } from "class-transformer"
 import { OrderStatus } from "@prisma/client"
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger"
@@ -173,6 +173,94 @@ export class VehicleCheckinDto {
   @IsOptional()
   @IsString()
   photoPositions?: string
+}
+
+export class CameraCaptureDto {
+  @ApiProperty({ description: "Posicion de check-in vinculada (Regla Anti-Fraude #8)", enum: ["FRONT", "BACK", "LEFT", "RIGHT", "DASHBOARD"], example: "FRONT" })
+  @IsString()
+  @IsNotEmpty()
+  position: string
+
+  @ApiProperty({ description: "Identificador de la camara ONVIF de origen", example: "CAM-BAHIA-01" })
+  @IsString()
+  @IsNotEmpty()
+  cameraId: string
+
+  @ApiProperty({ description: "Imagen capturada (snapshot ONVIF) en base64, sin prefijo data URI" })
+  @IsString()
+  @IsNotEmpty()
+  imageBase64: string
+
+  @ApiPropertyOptional({ description: "MIME type de la imagen", example: "image/jpeg" })
+  @IsOptional()
+  @IsString()
+  mimeType?: string
+}
+
+export class RequestCameraCaptureDto {
+  @ApiProperty({ description: "Posicion de check-in a capturar via camara ONVIF de bahia (Regla Anti-Fraude #8)", enum: ["FRONT", "BACK", "LEFT", "RIGHT", "DASHBOARD"], example: "FRONT" })
+  @IsString()
+  @IsNotEmpty()
+  position: string
+}
+
+export class SendQuoteDto {
+  @ApiProperty({ description: "Costo de mano de obra en Soles (debe ser > 0)", example: 150.0 })
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01, { message: "laborCost debe ser mayor a cero" })
+  laborCost: number
+
+  @ApiProperty({ description: "Costo total de repuestos en Soles (puede ser 0 si no hay repuestos)", example: 450.0 })
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0, { message: "partsCost no puede ser negativo" })
+  partsCost: number
+
+  @ApiPropertyOptional({ description: "Dias de validez de la cotizacion (default: 3)", example: 3, minimum: 1, maximum: 30 })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(30)
+  validDays?: number
+}
+
+export class ApproveQuoteDto {
+  @ApiProperty({ description: "Token de firma digital del cliente (Base64 o confirmacion con timestamp)", example: "APPROVED-uuid-1749380000000" })
+  @IsString({ message: "clientSignature es requerida" })
+  clientSignature: string
+}
+
+export class RejectQuoteDto {
+  @ApiProperty({ description: "Motivo del rechazo de la cotizacion por el cliente", example: "El presupuesto supera mi limite" })
+  @IsString({ message: "reason es requerida" })
+  reason: string
+}
+
+export class DeliverOrderDto {
+  @ApiProperty({ description: "Firma digital del cliente (conformidad de entrega)", example: "CONF-cliente-uuid-1717800000000" })
+  @IsString()
+  @MinLength(5)
+  clientSignature: string
+
+  @ApiProperty({ description: "Metodo de pago del cliente", enum: ["CASH", "YAPE", "PLIN", "CARD", "TRANSFER"], example: "YAPE" })
+  @IsIn(["CASH", "YAPE", "PLIN", "CARD", "TRANSFER"])
+  paymentMethod: string
+}
+
+export class CompleteWorkOrderDto {
+  @ApiProperty({ description: "Kilometraje de salida del vehiculo (debe ser >= odometro de ingreso)", example: 85120 })
+  @IsNumber()
+  @Min(0, { message: "El odometro de salida no puede ser negativo" })
+  odometerOut: number
+
+  @ApiProperty({ description: "Notas tecnicas del trabajo ejecutado", example: "Cambio de pastillas y discos delanteros, purgado de frenos completado" })
+  @IsString({ message: "Las notas tecnicas son requeridas" })
+  @MinLength(5, { message: "Las notas tecnicas deben tener al menos 5 caracteres" })
+  technicalNotes: string
+
+  @ApiPropertyOptional({ description: "Estado solicitado al finalizar (ignorado y forzado a IN_REVIEW si el rol es TRAINEE)", enum: ["READY", "IN_REVIEW"], example: "READY" })
+  @IsOptional()
+  @IsIn(["READY", "IN_REVIEW"], { message: "requestedStatus debe ser READY o IN_REVIEW" })
+  requestedStatus?: "READY" | "IN_REVIEW"
 }
 
 export class MechanicProgressDto {

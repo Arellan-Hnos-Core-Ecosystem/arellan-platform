@@ -51,6 +51,32 @@ export declare class VehicleCheckinDto {
     description?: string;
     photoPositions?: string;
 }
+export declare class CameraCaptureDto {
+    position: string;
+    cameraId: string;
+    imageBase64: string;
+    mimeType?: string;
+}
+export declare class SendQuoteDto {
+    laborCost: number;
+    partsCost: number;
+    validDays?: number;
+}
+export declare class ApproveQuoteDto {
+    clientSignature: string;
+}
+export declare class RejectQuoteDto {
+    reason: string;
+}
+export declare class DeliverOrderDto {
+    clientSignature: string;
+    paymentMethod: string;
+}
+export declare class CompleteWorkOrderDto {
+    odometerOut: number;
+    technicalNotes: string;
+    requestedStatus?: "READY" | "IN_REVIEW";
+}
 export declare class MechanicProgressDto {
     progressPercent: number;
     partsInstalled: number;

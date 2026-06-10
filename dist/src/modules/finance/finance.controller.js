@@ -16,6 +16,7 @@ exports.FinanceController = void 0;
 const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
 const finance_service_1 = require("./finance.service");
+const close_cashbox_session_use_case_1 = require("./use-cases/close-cashbox-session.use-case");
 const jwt_auth_guard_1 = require("../../common/guards/jwt-auth.guard");
 const roles_guard_1 = require("../../common/guards/roles.guard");
 const mfa_required_guard_1 = require("../../common/guards/mfa-required.guard");
@@ -25,14 +26,19 @@ const client_1 = require("@prisma/client");
 const finance_dto_1 = require("./dto/finance.dto");
 let FinanceController = class FinanceController {
     financeService;
-    constructor(financeService) {
+    closeCashboxSessionUseCase;
+    constructor(financeService, closeCashboxSessionUseCase) {
         this.financeService = financeService;
+        this.closeCashboxSessionUseCase = closeCashboxSessionUseCase;
     }
     openCashbox(user, dto) {
         return this.financeService.openCashbox(user.id, dto);
     }
     closeCashbox(user, dto) {
-        return this.financeService.closeCashbox(user.id, dto);
+        return this.closeCashboxSessionUseCase.execute(user.id, {
+            actualCash: dto.actualCash,
+            justificationText: dto.justificationText,
+        });
     }
     getTodaySession() {
         return this.financeService.getTodaySession();
@@ -60,6 +66,54 @@ let FinanceController = class FinanceController {
     }
     getCashboxHistory(limit, cursor) {
         return this.financeService.getCashboxHistory(limit, cursor);
+    }
+    async overrideCashbox(user, dto) {
+        const { authenticator } = await Promise.resolve().then(() => require("otplib"));
+        const owner = await this.financeService["prisma"].account.findUnique({
+            where: { id: user.id },
+            select: { mfaSecret: true, mfaEnabled: true },
+        });
+        if (!owner?.mfaEnabled || !owner?.mfaSecret) {
+            throw new Error("El OWNER no tiene MFA configurado. Configure Google Authenticator primero.");
+        }
+        const isValid = authenticator.verify({ token: dto.totpCode, secret: owner.mfaSecret });
+        if (!isValid) {
+            throw new Error("Código TOTP inválido o expirado.");
+        }
+        const session = await this.financeService["prisma"].cashboxSession.findUnique({
+            where: { id: dto.sessionId },
+        });
+        if (!session || session.status !== "BLOCKED") {
+            throw new Error("La sesión de caja no existe o no está en estado BLOCKED.");
+        }
+        const unblocked = await this.financeService["prisma"].cashboxSession.update({
+            where: { id: dto.sessionId },
+            data: {
+                status: "CLOSED_WITH_DISCREPANCY",
+                closedAt: new Date(),
+                notes: `OVERRIDE por OWNER ${user.id} con TOTP. ${dto.overrideReason ?? ""}`.trim(),
+            },
+        });
+        await this.financeService["prisma"].auditLog.create({
+            data: {
+                userId: user.id,
+                userName: "owner-override",
+                role: "OWNER",
+                action: "CASHBOX_OVERRIDE_TOTP",
+                entity: "CashboxSession",
+                entityId: dto.sessionId,
+                severity: "WARNING",
+                ipAddress: "system",
+                metadata: { overrideReason: dto.overrideReason ?? null },
+            },
+        });
+        return {
+            success: true,
+            sessionId: dto.sessionId,
+            newStatus: unblocked.status,
+            overriddenBy: user.id,
+            overriddenAt: new Date().toISOString(),
+        };
     }
     async generatePaymentQR(user, body) {
         return this.financeService.generatePaymentQR(body.workOrderId, user.id);
@@ -249,6 +303,24 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], FinanceController.prototype, "getCashboxHistory", null);
 __decorate([
+    (0, common_1.Post)("cashbox/override"),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.OWNER),
+    (0, swagger_1.ApiBearerAuth)("access-token"),
+    (0, swagger_1.ApiOperation)({
+        summary: "Override de caja bloqueada (OWNER + TOTP)",
+        description: "Desbloquea una sesión de caja en estado BLOCKED. Requiere código TOTP de 6 dígitos del OWNER via Google Authenticator. Anti-Fraude #2: solo OWNER puede desbloquear.",
+    }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: "Caja desbloqueada y cerrada con discrepancia" }),
+    (0, swagger_1.ApiResponse)({ status: 400, description: "Código TOTP inválido o sesión no está BLOCKED" }),
+    (0, swagger_1.ApiResponse)({ status: 403, description: "Solo OWNER" }),
+    __param(0, (0, current_user_decorator_1.CurrentUser)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, finance_dto_1.CashboxOverrideDto]),
+    __metadata("design:returntype", Promise)
+], FinanceController.prototype, "overrideCashbox", null);
+__decorate([
     (0, common_1.Post)("qr/generate"),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
     (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN, client_1.UserRole.OWNER, client_1.UserRole.FINANCE),
@@ -263,6 +335,7 @@ __decorate([
 exports.FinanceController = FinanceController = __decorate([
     (0, swagger_1.ApiTags)("Finance"),
     (0, common_1.Controller)("finance"),
-    __metadata("design:paramtypes", [finance_service_1.FinanceService])
+    __metadata("design:paramtypes", [finance_service_1.FinanceService,
+        close_cashbox_session_use_case_1.CloseCashboxSessionUseCase])
 ], FinanceController);
 //# sourceMappingURL=finance.controller.js.map

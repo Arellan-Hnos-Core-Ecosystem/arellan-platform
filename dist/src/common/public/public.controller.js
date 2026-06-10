@@ -16,10 +16,19 @@ exports.PublicController = void 0;
 const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
 const prisma_service_1 = require("../prisma/prisma.service");
+const device_auth_guard_1 = require("../guards/device-auth.guard");
+const orders_service_1 = require("../../modules/orders/orders.service");
+const process_biometric_attendance_use_case_1 = require("../../modules/attendance/use-cases/process-biometric-attendance.use-case");
+const orders_dto_1 = require("../../modules/orders/dto/orders.dto");
+const attendance_dto_1 = require("../../modules/attendance/dto/attendance.dto");
 let PublicController = class PublicController {
     prisma;
-    constructor(prisma) {
+    ordersService;
+    processBiometricAttendanceUseCase;
+    constructor(prisma, ordersService, processBiometricAttendanceUseCase) {
         this.prisma = prisma;
+        this.ordersService = ordersService;
+        this.processBiometricAttendanceUseCase = processBiometricAttendanceUseCase;
     }
     async lookup(plate, code) {
         if (plate) {
@@ -50,6 +59,12 @@ let PublicController = class PublicController {
         if (!order)
             return { found: false, message: "Orden de trabajo no encontrada" };
         return { found: true, order };
+    }
+    async biometricAttendance(dto) {
+        return this.processBiometricAttendanceUseCase.execute(dto);
+    }
+    async cameraCapture(id, dto) {
+        return this.ordersService.captureCameraPhoto(id, dto);
     }
 };
 exports.PublicController = PublicController;
@@ -88,9 +103,48 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], PublicController.prototype, "getOrderByNumber", null);
+__decorate([
+    (0, common_1.Post)("iot/attendance/biometric"),
+    (0, common_1.UseGuards)(device_auth_guard_1.DeviceAuthGuard),
+    (0, swagger_1.ApiTags)("IoT"),
+    (0, swagger_1.ApiHeader)({ name: "x-device-key", description: "Secreto compartido del bridge IoT (IOT_BRIDGE_SHARED_SECRET)" }),
+    (0, swagger_1.ApiOperation)({
+        summary: "Check-in biometrico ZKTeco (arellan-hardware-iot)",
+        description: "Recibe eventos de asistencia sanitizados por ZktecoDeviceAdapter. Compara el timestamp contra Settings.attendance_schedule; si excede la tolerancia, marca el registro como LATE e injerta la penalizacion salarial en AuditLog de forma atomica (ProcessBiometricAttendanceUseCase).",
+    }),
+    (0, swagger_1.ApiResponse)({ status: 201, description: "Asistencia procesada" }),
+    (0, swagger_1.ApiResponse)({ status: 401, description: "Credencial de dispositivo invalida" }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: "No existe personal con ese DNI" }),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [attendance_dto_1.BiometricCheckInDto]),
+    __metadata("design:returntype", Promise)
+], PublicController.prototype, "biometricAttendance", null);
+__decorate([
+    (0, common_1.Post)("iot/orders/:id/photos/camera-capture"),
+    (0, common_1.UseGuards)(device_auth_guard_1.DeviceAuthGuard),
+    (0, swagger_1.ApiTags)("IoT"),
+    (0, swagger_1.ApiHeader)({ name: "x-device-key", description: "Secreto compartido del bridge IoT (IOT_BRIDGE_SHARED_SECRET)" }),
+    (0, swagger_1.ApiOperation)({
+        summary: "Captura ONVIF vinculada a OT (arellan-hardware-iot)",
+        description: "Recibe el snapshot capturado por OnvifCameraClient al validar una placa en arellan-mechanic-ui. Calcula el hash SHA-256 en el servidor y vincula la foto a una posicion de check-in obligatoria de la OT (Regla Anti-Fraude #8).",
+    }),
+    (0, swagger_1.ApiParam)({ name: "id", description: "ID de la OT (UUID v4)" }),
+    (0, swagger_1.ApiResponse)({ status: 201, description: "Foto vinculada a la OT" }),
+    (0, swagger_1.ApiResponse)({ status: 400, description: "Posicion invalida" }),
+    (0, swagger_1.ApiResponse)({ status: 401, description: "Credencial de dispositivo invalida" }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: "OT no encontrada" }),
+    __param(0, (0, common_1.Param)("id")),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, orders_dto_1.CameraCaptureDto]),
+    __metadata("design:returntype", Promise)
+], PublicController.prototype, "cameraCapture", null);
 exports.PublicController = PublicController = __decorate([
     (0, swagger_1.ApiTags)("Public"),
     (0, common_1.Controller)("public"),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+        orders_service_1.OrdersService,
+        process_biometric_attendance_use_case_1.ProcessBiometricAttendanceUseCase])
 ], PublicController);
 //# sourceMappingURL=public.controller.js.map

@@ -1,16 +1,18 @@
-import { Injectable, NotFoundException, ConflictException, Logger, BadRequestException } from "@nestjs/common"
+import { Injectable, NotFoundException, ConflictException, Logger, BadRequestException, HttpException, HttpStatus } from "@nestjs/common"
+import { ConfigService } from "@nestjs/config"
 import { createHash } from "crypto"
 import { PrismaService } from "../../common/prisma/prisma.service"
 import { OrderStatus, Prisma, PaymentMethod, UserRole, ApprovalType, ApprovalStatus } from "@prisma/client"
-import { CreateOrderDto, UpdateOrderDto, UpdateStatusDto, OrderFilterDto, PaginatedResult, ApplyDiscountDto, RequestPartsDto, MechanicProgressDto, VehicleCheckinDto } from "./dto/orders.dto"
+import { CreateOrderDto, UpdateOrderDto, UpdateStatusDto, OrderFilterDto, PaginatedResult, ApplyDiscountDto, RequestPartsDto, MechanicProgressDto, VehicleCheckinDto, CameraCaptureDto } from "./dto/orders.dto"
 import { RealtimeGateway } from "../../common/gateway/realtime.gateway"
 import { WorkOrder } from "../../domain/work-orders/entities/work-order.entity"
+import { IotBridgeClient } from "../../common/iot-bridge/iot-bridge.client"
 
 const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   RECEIVED: [OrderStatus.IN_DIAGNOSIS, OrderStatus.CANCELLED],
   IN_DIAGNOSIS: [OrderStatus.BUDGETED, OrderStatus.CANCELLED],
   BUDGETED: [OrderStatus.IN_PROGRESS, OrderStatus.CANCELLED],
-  IN_PROGRESS: [OrderStatus.IN_REVIEW, OrderStatus.CANCELLED],
+  IN_PROGRESS: [OrderStatus.IN_REVIEW, OrderStatus.READY, OrderStatus.CANCELLED],
   IN_REVIEW: [OrderStatus.READY, OrderStatus.IN_PROGRESS, OrderStatus.CANCELLED],
   READY: [OrderStatus.DELIVERED, OrderStatus.CANCELLED],
   DELIVERED: [],
@@ -32,6 +34,8 @@ export class OrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly wsGateway: RealtimeGateway,
+    private readonly config: ConfigService,
+    private readonly iotBridge: IotBridgeClient,
   ) {}
 
   async create(dto: CreateOrderDto, userId: string) {
@@ -101,7 +105,8 @@ export class OrdersService {
         parts: { include: { item: true } },
         statusHistory: { orderBy: { timestamp: "desc" } },
         events: { orderBy: { createdAt: "desc" } },
-        payments: { select: { id: true, method: true, amount: true, paidAt: true } },
+        payments: { select: { id: true, method: true, amount: true, paidAt: true, isPersonalYape: true, yapeAccount: true } },
+        quote: true,
       },
     })
 
@@ -479,8 +484,15 @@ export class OrdersService {
   async requestParts(orderId: string, dto: RequestPartsDto, userId: string, userName: string) {
     const order = await this.prisma.workOrder.findUnique({ where: { id: orderId } })
     if (!order) throw new NotFoundException("Orden de trabajo no encontrada")
-    if (["DELIVERED", "CANCELLED"].includes(order.status)) {
-      throw new ConflictException("No se pueden solicitar repuestos para una orden finalizada")
+    if (order.status !== "IN_PROGRESS") {
+      throw new HttpException(
+        {
+          statusCode: 422,
+          error: "INVENTORY_NO_ACTIVE_ORDER",
+          message: `Solo se puede solicitar repuestos para OT en estado IN_PROGRESS. OT ${order.number} está en estado ${order.status}.`,
+        },
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      )
     }
 
     const results = await this.prisma.$transaction(async (tx) => {
@@ -692,6 +704,7 @@ export class OrdersService {
           clientId: vehicle.clientId,
           mechanicId: userId,
           description: body.description || `Ingreso de vehículo ${plateNormalized}`,
+          odometerIn: body.kilometerReading ? parseInt(body.kilometerReading, 10) || null : null,
           createdBy: userId,
         },
         include: ORDER_INCLUDE,
@@ -741,5 +754,89 @@ export class OrdersService {
 
     this.logger.log(`Checkin: Vehículo ${plateNormalized} → OT ${order.number}`)
     return { success: true, orderId: order.id, orderNumber: order.number }
+  }
+
+  // FASE 2 (arellan-hardware-iot): captura disparada por OnvifCameraClient al
+  // registrar una placa valida. Calcula el hash SHA-256 en el servidor y la
+  // vincula de forma obligatoria a una posicion de check-in (Anti-Fraude #8),
+  // como evidencia adicional a la camara manual de la tablet.
+  async captureCameraPhoto(orderId: string, dto: CameraCaptureDto) {
+    const order = await this.prisma.workOrder.findUnique({ where: { id: orderId } })
+    if (!order) {
+      throw new NotFoundException("OT no encontrada")
+    }
+
+    const position = dto.position.toUpperCase().trim()
+    const allowedPositions = WorkOrder.REQUIRED_CHECKIN_POSITIONS as readonly string[]
+    if (!allowedPositions.includes(position)) {
+      throw new BadRequestException(
+        `Posicion invalida: ${position}. Permitidas: ${allowedPositions.join(", ")}`,
+      )
+    }
+
+    const mimeType = dto.mimeType ?? "image/jpeg"
+    const buffer = Buffer.from(dto.imageBase64, "base64")
+    const hash = createHash("sha256").update(buffer).digest("hex")
+    const url = `data:${mimeType};base64,${dto.imageBase64}`
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.workOrderPhoto.create({
+        data: { orderId, url, type: mimeType, hash },
+      })
+
+      const result = await tx.workOrder.update({
+        where: { id: orderId },
+        data: { photos: { push: url } },
+        include: ORDER_INCLUDE,
+      })
+
+      await tx.workOrderEvent.create({
+        data: {
+          workOrderId: orderId,
+          event: "ONVIF_CAMERA_CHECKIN",
+          description: `Captura automatica ONVIF (${position}) desde camara ${dto.cameraId}`,
+          metadata: { position, cameraId: dto.cameraId, hash, source: "ONVIF" },
+          userId: "system",
+        },
+      })
+
+      return result
+    })
+
+    this.logger.log(
+      `Captura ONVIF (${position}) vinculada a OT ${order.number} desde camara ${dto.cameraId}`,
+    )
+    return { orderId, orderNumber: order.number, position, hash, photoCount: updated.photos.length }
+  }
+
+  // FASE 3 (arellan-mechanic-ui): disparado desde la tablet (JWT) tras el
+  // check-in con placa valida. Ordena al bridge arellan-hardware-iot tomar el
+  // snapshot ONVIF de la camara de bahia configurada (ONVIF_DEFAULT_CAMERA_ID);
+  // el bridge reenvia la imagen a captureCameraPhoto para hash+vinculo.
+  // Best-effort: si el bridge/camara no responde, no bloquea el check-in.
+  async requestCameraCapture(orderId: string, position: string) {
+    const order = await this.prisma.workOrder.findUnique({ where: { id: orderId } })
+    if (!order) {
+      throw new NotFoundException("OT no encontrada")
+    }
+
+    const pos = position.toUpperCase().trim()
+    const allowedPositions = WorkOrder.REQUIRED_CHECKIN_POSITIONS as readonly string[]
+    if (!allowedPositions.includes(pos)) {
+      throw new BadRequestException(
+        `Posicion invalida: ${pos}. Permitidas: ${allowedPositions.join(", ")}`,
+      )
+    }
+
+    const cameraId = this.config.get<string>("ONVIF_DEFAULT_CAMERA_ID", "CAM-BAHIA-01")
+
+    try {
+      return await this.iotBridge.requestCapture(cameraId, { orderId, position: pos })
+    } catch (error) {
+      this.logger.warn(
+        `Captura ONVIF no disponible (OT ${order.number}, camara ${cameraId}): ${(error as Error).message}`,
+      )
+      return { requested: true, delivered: false, orderId, orderNumber: order.number, position: pos, cameraId }
+    }
   }
 }

@@ -37,9 +37,9 @@ export declare class InvoicesController {
             approvedBy: string | null;
             total: import("@prisma/client/runtime/library").Decimal;
             subtotal: import("@prisma/client/runtime/library").Decimal;
-            dueDate: Date | null;
             paidAmount: import("@prisma/client/runtime/library").Decimal;
             dueAmount: import("@prisma/client/runtime/library").Decimal;
+            dueDate: Date | null;
             issuedAt: Date | null;
             cancelledAt: Date | null;
             cancelReason: string | null;
@@ -78,9 +78,9 @@ export declare class InvoicesController {
         approvedBy: string | null;
         total: import("@prisma/client/runtime/library").Decimal;
         subtotal: import("@prisma/client/runtime/library").Decimal;
-        dueDate: Date | null;
         paidAmount: import("@prisma/client/runtime/library").Decimal;
         dueAmount: import("@prisma/client/runtime/library").Decimal;
+        dueDate: Date | null;
         issuedAt: Date | null;
         cancelledAt: Date | null;
         cancelReason: string | null;
@@ -110,9 +110,9 @@ export declare class InvoicesController {
         approvedBy: string | null;
         total: import("@prisma/client/runtime/library").Decimal;
         subtotal: import("@prisma/client/runtime/library").Decimal;
-        dueDate: Date | null;
         paidAmount: import("@prisma/client/runtime/library").Decimal;
         dueAmount: import("@prisma/client/runtime/library").Decimal;
+        dueDate: Date | null;
         issuedAt: Date | null;
         cancelledAt: Date | null;
         cancelReason: string | null;
@@ -254,9 +254,9 @@ export declare class InvoicesController {
         approvedBy: string | null;
         total: import("@prisma/client/runtime/library").Decimal;
         subtotal: import("@prisma/client/runtime/library").Decimal;
-        dueDate: Date | null;
         paidAmount: import("@prisma/client/runtime/library").Decimal;
         dueAmount: import("@prisma/client/runtime/library").Decimal;
+        dueDate: Date | null;
         issuedAt: Date | null;
         cancelledAt: Date | null;
         cancelReason: string | null;
@@ -289,9 +289,9 @@ export declare class InvoicesController {
         approvedBy: string | null;
         total: import("@prisma/client/runtime/library").Decimal;
         subtotal: import("@prisma/client/runtime/library").Decimal;
-        dueDate: Date | null;
         paidAmount: import("@prisma/client/runtime/library").Decimal;
         dueAmount: import("@prisma/client/runtime/library").Decimal;
+        dueDate: Date | null;
         issuedAt: Date | null;
         cancelledAt: Date | null;
         cancelReason: string | null;
@@ -313,9 +313,9 @@ export declare class InvoicesController {
         approvedBy: string | null;
         total: import("@prisma/client/runtime/library").Decimal;
         subtotal: import("@prisma/client/runtime/library").Decimal;
-        dueDate: Date | null;
         paidAmount: import("@prisma/client/runtime/library").Decimal;
         dueAmount: import("@prisma/client/runtime/library").Decimal;
+        dueDate: Date | null;
         issuedAt: Date | null;
         cancelledAt: Date | null;
         cancelReason: string | null;
@@ -337,9 +337,9 @@ export declare class InvoicesController {
         approvedBy: string | null;
         total: import("@prisma/client/runtime/library").Decimal;
         subtotal: import("@prisma/client/runtime/library").Decimal;
-        dueDate: Date | null;
         paidAmount: import("@prisma/client/runtime/library").Decimal;
         dueAmount: import("@prisma/client/runtime/library").Decimal;
+        dueDate: Date | null;
         issuedAt: Date | null;
         cancelledAt: Date | null;
         cancelReason: string | null;

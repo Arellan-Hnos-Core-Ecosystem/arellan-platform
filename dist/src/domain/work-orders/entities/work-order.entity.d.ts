@@ -46,9 +46,13 @@ export declare class WorkOrder {
     transitionTo(nextStatus: OrderStatus): WorkOrder;
     assignMechanic(mechanicId: string): WorkOrder;
     applyDiscount(discount: Money): WorkOrder;
+    assertCanSendQuote(): void;
+    assertCanSendQuote_totalConsistency(storedTotal: number): void;
     assertCanStartProgress(hasParts: boolean): void;
     static readonly REQUIRED_CHECKIN_POSITIONS: readonly ["FRONT", "BACK", "LEFT", "RIGHT", "DASHBOARD"];
     static assertCheckinPhotoPositions(suppliedPositions: string[]): void;
+    static resolveCompletionTarget(currentStatus: OrderStatus, requestedStatus: OrderStatus, role: string): OrderStatus;
+    static assertOdometerOut(odometerIn: number | null, odometerOut: number): void;
     canDeliver(totalPaid: Money): boolean;
     pendingBalance(totalPaid: Money): Money;
 }

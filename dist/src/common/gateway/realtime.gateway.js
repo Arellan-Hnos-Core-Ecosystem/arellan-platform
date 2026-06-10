@@ -53,6 +53,9 @@ let RealtimeGateway = class RealtimeGateway {
             if (role === "OWNER" || role === "ADMIN" || role === "FINANCE") {
                 client.join("dashboard");
             }
+            if (role === "OWNER" || role === "ADMIN") {
+                client.join("room:management");
+            }
             this.logger.log(`WS client connected: ${payload.email || userId} (${role})`);
         }
         catch (e) {
@@ -78,6 +81,11 @@ let RealtimeGateway = class RealtimeGateway {
         if (data.orderId) {
             this.server.to(`order:${data.orderId}`).emit("order:status_changed", data);
         }
+    }
+    emitQaInspectionRequested(data) {
+        this.server.to("room:management").emit("qa:inspection_requested", data);
+        this.server.to("dashboard").emit("qa:inspection_requested", data);
+        this.server.to(`order:${data.orderId}`).emit("qa:inspection_requested", data);
     }
     emitMechanicProgress(data) {
         this.server.to("dashboard").emit("mechanic:progress", data);
