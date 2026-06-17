@@ -1,5 +1,6 @@
 import { NestFactory } from "@nestjs/core"
 import { ValidationPipe, Logger } from "@nestjs/common"
+import type { Request, Response } from "express"
 import { ConfigService } from "@nestjs/config"
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger"
 import helmet from "helmet"
@@ -12,7 +13,32 @@ async function bootstrap() {
   const config = app.get(ConfigService)
   const logger = new Logger("Bootstrap")
 
-  app.use(helmet())
+  const isProduction = config.get("NODE_ENV") === "production"
+
+  app.use(
+    helmet({
+      // CSP estricto solo en produccion; en desarrollo local se desactiva para
+      // no interferir con las herramientas de inspeccion del navegador
+      contentSecurityPolicy: isProduction
+        ? {
+            directives: {
+              defaultSrc: ["'self'"],
+              scriptSrc: ["'self'", "'unsafe-inline'"],
+              styleSrc: ["'self'", "'unsafe-inline'"],
+              imgSrc: ["'self'", "data:"],
+              connectSrc: ["'self'"],
+              objectSrc: ["'none'"],
+              frameAncestors: ["'none'"],
+            },
+          }
+        : false,
+      crossOriginEmbedderPolicy: false,
+      frameguard: { action: "deny" },
+      hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+      referrerPolicy: { policy: "no-referrer" },
+      noSniff: true,
+    }),
+  )
 
   const defaultCorsOrigins =
     config.get("NODE_ENV") === "production"
@@ -22,9 +48,44 @@ async function bootstrap() {
   app.enableCors({
     origin: config.get<string>("CORS_ORIGINS", defaultCorsOrigins).split(","),
     credentials: true,
+    methods: "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS",
   })
 
   app.setGlobalPrefix("api/v1")
+
+  // Raiz fuera del prefijo api/v1: micro-documento HTML valido (lang/title/
+  // viewport) para que los DevTools del navegador no auditen el status como
+  // documento defectuoso. El JSON de salud para monitores vive en /api/v1/health.
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .get("/", (_req: Request, res: Response) =>
+      res.type("html").send(`<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Arellan Core API - Status</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: monospace;
+      background-color: #0f172a;
+      color: #38bdf8;
+      padding: 20px;
+    }
+    #json-response {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <pre id="json-response">{"status":"online","service":"arellan-core-api","timestamp":"${new Date().toISOString()}"}</pre>
+</body>
+</html>
+`),
+    )
 
   app.useGlobalPipes(
     new ValidationPipe({

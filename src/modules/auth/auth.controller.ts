@@ -1,4 +1,5 @@
 import { Controller, Post, Get, Delete, Body, Param, Req, Res, UseGuards, HttpCode } from "@nestjs/common"
+import { Throttle } from "@nestjs/throttler"
 import { Response } from "express"
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam, ApiBody } from "@nestjs/swagger"
 import { AuthService, AuthUser } from "./auth.service"
@@ -15,6 +16,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post("login")
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({
     summary: "Iniciar sesion con email y contrasena",
     description: "Autentica al usuario usando credenciales corporativas. Si MFA esta habilitado, retorna sessionToken para continuar con verificacion TOTP. Bloquea la cuenta tras 5 intentos fallidos durante 15 minutos.",
@@ -31,8 +33,8 @@ export class AuthController {
 
     if (!(result as any).mfaPending) {
       res.cookie("arellan-auth", "true", {
-        httpOnly: false,
-        secure: false,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production" && process.env.COOKIE_SECURE !== "false",
         sameSite: "lax",
         path: "/",
         maxAge: 7 * 24 * 60 * 60 * 1000,
@@ -42,6 +44,7 @@ export class AuthController {
   }
 
   @Post("mechanic/login")
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({
     summary: "Login rapido para mecanicos via PIN",
     description: "Autentica a mecanicos y practicantes usando su PIN numerico de 6 digitos. Solo valido para roles MECHANIC y TRAINEE con cuenta ACTIVA. Disenado para tablets del taller.",
@@ -54,8 +57,8 @@ export class AuthController {
     const userAgent = req.headers?.["user-agent"]
     const result = await this.authService.mechanicLogin(dto.pin, ip, userAgent)
     res.cookie("arellan-auth", "true", {
-      httpOnly: false,
-      secure: false,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production" && process.env.COOKIE_SECURE !== "false",
       sameSite: "lax",
       path: "/",
       maxAge: 7 * 24 * 60 * 60 * 1000,
@@ -74,8 +77,8 @@ export class AuthController {
   async verifyMfa(@Body() dto: MfaVerifyDto, @Res({ passthrough: true }) res: Response) {
     const result = await this.authService.verifyMfa(dto)
     res.cookie("arellan-auth", "true", {
-      httpOnly: false,
-      secure: false,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production" && process.env.COOKIE_SECURE !== "false",
       sameSite: "lax",
       path: "/",
       maxAge: 7 * 24 * 60 * 60 * 1000,

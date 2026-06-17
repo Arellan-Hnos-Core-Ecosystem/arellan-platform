@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common"
 import { AnalyticsCacheService } from "./cache/analytics-cache.service"
 import { GetExecutiveSummaryUseCase } from "./use-cases/get-executive-summary.use-case"
-import type { ExecutiveSummaryReport } from "./types/executive-summary-report.types"
+import type { ExecutiveSummaryReport } from "@arellan-hnos/business-intelligence-lab"
 
 @Injectable()
 export class AnalyticsService {

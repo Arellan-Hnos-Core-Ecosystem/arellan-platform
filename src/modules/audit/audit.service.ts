@@ -19,6 +19,8 @@ interface AuditFilters {
   to?: string
   limit?: number
   cursor?: string
+  page?: number
+  pageSize?: number
 }
 
 @Injectable()
@@ -28,7 +30,7 @@ export class AuditService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(filters: AuditFilters): Promise<PaginatedResult<any>> {
-    const { userId, action, entity, from, to, limit = 50, cursor } = filters
+    const { userId, action, entity, from, to, limit = 50, cursor, page, pageSize } = filters
 
     const where: Record<string, unknown> = {}
 
@@ -40,6 +42,31 @@ export class AuditService {
       where.createdAt = {}
       if (from) (where.createdAt as Record<string, unknown>).gte = new Date(from)
       if (to) (where.createdAt as Record<string, unknown>).lte = new Date(to)
+    }
+
+    // Modo offset (panel admin: ?page=N&pageSize=M); el modo cursor de abajo
+    // queda intacto para los consumidores existentes
+    if (page !== undefined || pageSize !== undefined) {
+      const size = Math.min(pageSize ?? 20, 100)
+      const currentPage = page ?? 1
+      const [pagedLogs, pagedTotal] = await Promise.all([
+        this.prisma.auditLog.findMany({
+          where,
+          take: size,
+          skip: (currentPage - 1) * size,
+          orderBy: { createdAt: "desc" },
+        }),
+        this.prisma.auditLog.count({ where }),
+      ])
+      return {
+        data: pagedLogs,
+        pagination: {
+          total: pagedTotal,
+          limit: size,
+          cursor: null,
+          hasNextPage: currentPage * size < pagedTotal,
+        },
+      }
     }
 
     const take = Math.min(limit, 100) + 1

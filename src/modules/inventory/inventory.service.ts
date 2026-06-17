@@ -17,30 +17,90 @@ export class InventoryService {
     private readonly redis: RedisService,
   ) {}
 
-  async findAll(category?: string, lowStock?: boolean, limit = 20, cursor?: string) {
+  async findAll(category?: string, lowStock?: boolean, limit = 20, cursor?: string, search?: string, page?: number, pageSize?: number) {
     if (lowStock) {
       return this.findAllLowStock(category, limit, cursor)
     }
 
-    const cacheKey = `${CACHE_PREFIX}:catalog:${category ?? "all"}:${limit}:${cursor ?? "start"}`
+    // Busqueda server-side insensible por nombre o SKU (Anti "Faro" sin resultados)
+    const where: Prisma.InventoryItemWhereInput = {
+      ...(category ? { categoryId: category } : {}),
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search, mode: "insensitive" } },
+              { sku: { contains: search, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+    }
+
+    // Modo offset (panel admin: ?page=N&pageSize=M&search=...)
+    if (page !== undefined || pageSize !== undefined) {
+      const size = Math.min(pageSize ?? 10, 100)
+      const currentPage = page ?? 1
+      const offsetKey = `${CACHE_PREFIX}:catalog:offset:${category ?? "all"}:${search ?? "none"}:${currentPage}:${size}`
+      const cachedOffset = await this.redis.get(offsetKey)
+      if (cachedOffset) return JSON.parse(cachedOffset)
+
+      const [pagedItems, total] = await Promise.all([
+        this.prisma.inventoryItem.findMany({
+          where,
+          orderBy: { createdAt: "desc" },
+          take: size,
+          skip: (currentPage - 1) * size,
+          include: { category: { select: { name: true } } },
+        }),
+        this.prisma.inventoryItem.count({ where }),
+      ])
+
+      const offsetResult = {
+        data: pagedItems.map((i) => this.flattenItem(i)),
+        total,
+        page: currentPage,
+        pageSize: size,
+        totalPages: Math.ceil(total / size),
+      }
+      await this.redis.set(offsetKey, JSON.stringify(offsetResult), CATALOG_CACHE_TTL)
+      return offsetResult
+    }
+
+    const cacheKey = `${CACHE_PREFIX}:catalog:${category ?? "all"}:${search ?? "none"}:${limit}:${cursor ?? "start"}`
     const cached = await this.redis.get(cacheKey)
     if (cached) return JSON.parse(cached)
 
     const take = limit + 1
     const items = await this.prisma.inventoryItem.findMany({
-      where: category ? { categoryId: category } : {},
+      where,
       orderBy: { createdAt: "desc" },
       take,
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+      include: { category: { select: { name: true } } },
     })
 
     const hasMore = items.length > limit
-    const data = hasMore ? items.slice(0, limit) : items
-    const nextCursor = hasMore ? data[data.length - 1].id : null
+    const sliced = hasMore ? items.slice(0, limit) : items
+    const data = sliced.map((i) => this.flattenItem(i))
+    const nextCursor = hasMore ? sliced[sliced.length - 1].id : null
     const result = { data, nextCursor, hasMore }
 
     await this.redis.set(cacheKey, JSON.stringify(result), CATALOG_CACHE_TTL)
     return result
+  }
+
+  // Contrato plano para los frontends: el modelo Prisma expone sku/stock/
+  // unitPrice y la categoria como relacion — se emiten alias canonicos
+  // (code/currentStock/salePrice/category-string) sin quitar los originales
+  private flattenItem(i: { sku: string; stock: number; costPrice: unknown; unitPrice: unknown; category?: { name: string } | null } & Record<string, unknown>) {
+    return {
+      ...i,
+      code: i.sku,
+      currentStock: i.stock,
+      costPrice: Number(i.costPrice ?? 0),
+      salePrice: Number(i.unitPrice ?? 0),
+      category: i.category?.name ?? null,
+      categoryName: i.category?.name ?? "Sin categoría",
+    }
   }
 
   private async findAllLowStock(category?: string, limit = 20, cursor?: string) {
@@ -57,11 +117,13 @@ export class InventoryService {
       orderBy: { stock: "asc" },
       take,
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+      include: { category: { select: { name: true } } },
     })
 
     const hasMore = items.length > limit
-    const data = hasMore ? items.slice(0, limit) : items
-    const nextCursor = hasMore ? data[data.length - 1].id : null
+    const sliced = hasMore ? items.slice(0, limit) : items
+    const data = sliced.map((i) => this.flattenItem(i))
+    const nextCursor = hasMore ? sliced[sliced.length - 1].id : null
     const result = { data, nextCursor, hasMore }
 
     await this.redis.set(cacheKey, JSON.stringify(result), CATALOG_CACHE_TTL)
@@ -90,21 +152,54 @@ export class InventoryService {
       throw new ConflictException("Ya existe un item con ese SKU")
     }
 
-    const item = await this.prisma.inventoryItem.create({
-      data: {
-        sku: dto.sku,
-        name: dto.name,
-        categoryId: dto.category,
-        costPrice: 0,
-        stock: dto.stock,
-        minStock: dto.minStock,
-        unitPrice: dto.unitPrice,
-      },
-    })
+    // dto.category puede llegar como UUID de Category o como nombre escrito en
+    // el panel ("Frenos"). Pasarlo crudo como FK dispara P2003 (constraint
+    // inventory_items_categoryId_fkey). Se resuelve: id existente -> usar;
+    // texto -> upsert por nombre (Category.name es @unique).
+    let categoryId: string | null = null
+    if (dto.category) {
+      const byId = await this.prisma.category.findUnique({ where: { id: dto.category } })
+      if (byId) {
+        categoryId = byId.id
+      } else {
+        const byName = await this.prisma.category.upsert({
+          where: { name: dto.category },
+          update: {},
+          create: { name: dto.category },
+        })
+        categoryId = byName.id
+      }
+    }
 
-    await this.invalidateCatalogCache()
-    this.logger.log(`Item creado: ${item.sku} (${item.id})`)
-    return item
+    try {
+      const item = await this.prisma.inventoryItem.create({
+        data: {
+          sku: dto.sku,
+          name: dto.name,
+          categoryId,
+          costPrice: 0,
+          stock: dto.stock,
+          minStock: dto.minStock,
+          unitPrice: dto.unitPrice,
+        },
+      })
+
+      await this.invalidateCatalogCache()
+      this.logger.log(`Item creado: ${item.sku} (${item.id})`)
+      return item
+    } catch (err) {
+      // Red de seguridad ante carreras: SKU duplicado (P2002) o FK rota (P2003)
+      // se reportan como 4xx amigables en vez de colapsar con 500
+      if (err instanceof Prisma.PrismaClientKnownRequestError) {
+        if (err.code === "P2002") {
+          throw new ConflictException("El SKU ya se encuentra registrado")
+        }
+        if (err.code === "P2003") {
+          throw new BadRequestException("La categoría indicada no existe")
+        }
+      }
+      throw err
+    }
   }
 
   async update(id: string, dto: UpdateItemDto) {
@@ -237,10 +332,13 @@ export class InventoryService {
     const items = await this.prisma.inventoryItem.findMany({
       where: { stock: { lte: this.prisma.inventoryItem.fields.minStock } },
       orderBy: { stock: "asc" },
+      include: { category: { select: { name: true } } },
     })
 
-    await this.redis.set(cacheKey, JSON.stringify(items), 60)
-    return items
+    const flattened = items.map((i) => this.flattenItem(i))
+
+    await this.redis.set(cacheKey, JSON.stringify(flattened), 60)
+    return flattened
   }
 
   async getValuation() {

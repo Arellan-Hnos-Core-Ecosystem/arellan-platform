@@ -31,4 +31,18 @@ export class AuditFilterDto {
   @IsOptional()
   @IsString()
   cursor?: string
+
+  // Paginacion por offset (el panel admin envia ?page=1&pageSize=5; sin estos
+  // campos el whitelist con forbidNonWhitelisted responde 400)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @IsOptional()
+  page?: number
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @IsOptional()
+  pageSize?: number
 }

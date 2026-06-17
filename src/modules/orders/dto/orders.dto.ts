@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum, IsNumber, IsDateString, IsUUID, Min, Max, IsArray, ValidateNested, Matches, IsIn, MinLength, IsNotEmpty } from "class-validator"
+import { IsString, IsOptional, IsEnum, IsNumber, IsInt, IsDateString, IsUUID, Min, Max, IsArray, ValidateNested, Matches, IsIn, MinLength, IsNotEmpty } from "class-validator"
 import { Type } from "class-transformer"
 import { OrderStatus } from "@prisma/client"
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger"
@@ -111,6 +111,21 @@ export class OrderFilterDto {
   @IsOptional()
   @IsString()
   cursor?: string
+
+  @ApiPropertyOptional({ description: "Numero de pagina para paginacion offset (min 1)", example: 1, minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @IsOptional()
+  page?: number
+
+  @ApiPropertyOptional({ description: "Resultados por pagina para paginacion offset (1-100)", example: 10, minimum: 1, maximum: 100 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  @IsOptional()
+  pageSize?: number
 }
 
 export interface PaginatedResult<T> {

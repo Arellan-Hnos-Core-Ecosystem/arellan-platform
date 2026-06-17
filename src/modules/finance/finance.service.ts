@@ -31,6 +31,7 @@ import {
   TransactionType,
   ApprovalLevel,
   ExpenseStatus,
+  ExpenseCategory,
   Prisma,
   UserRole,
 } from "@prisma/client"
@@ -50,15 +51,14 @@ export class FinanceService {
   ) {}
 
   async openCashbox(userId: string, dto: OpenCashboxDto) {
-    const todayStart = new Date()
-    todayStart.setHours(0, 0, 0, 0)
-    const todayEnd = new Date()
-    todayEnd.setHours(23, 59, 59, 999)
-
+    // Invariante: a lo sumo una sesion OPEN a la vez, sin importar el dia en
+    // que se abrio (mismo criterio que closeCashbox/getTodaySession). Filtrar
+    // por "abierta hoy" permitia abrir una 2da caja si la de un dia previo
+    // seguia OPEN sin cerrar.
     const existing = await this.prisma.cashboxSession.findFirst({
-      where: { openedAt: { gte: todayStart, lte: todayEnd }, status: "OPEN" },
+      where: { status: "OPEN" },
     })
-    if (existing) throw new ConflictException("Ya existe una caja abierta hoy")
+    if (existing) throw new ConflictException("Ya existe una caja abierta")
 
     const session = await this.prisma.cashboxSession.create({
       data: { openedById: userId, openingBalance: dto.openingBalance, status: "OPEN" },
@@ -122,13 +122,12 @@ export class FinanceService {
   }
 
   async getTodaySession() {
-    const todayStart = new Date()
-    todayStart.setHours(0, 0, 0, 0)
-    const todayEnd = new Date()
-    todayEnd.setHours(23, 59, 59, 999)
-
+    // Caja "activa" = la unica sesion con status OPEN, sin importar el dia en
+    // que se abrio (mismo criterio que closeCashbox). El filtro previo por
+    // openedAt-de-hoy dejaba sin encontrar sesiones OPEN abiertas dias
+    // anteriores -> {open:false} pese a status='OPEN' en BD.
     const session = await this.prisma.cashboxSession.findFirst({
-      where: { openedAt: { gte: todayStart, lte: todayEnd }, status: "OPEN" },
+      where: { status: "OPEN" },
       include: {
         transactions: { orderBy: { createdAt: "desc" } },
         openedBy: { select: { id: true, name: true, role: true } },
@@ -136,7 +135,17 @@ export class FinanceService {
     })
 
     if (!session) return { open: false, message: "No hay caja abierta hoy" }
-    return { open: true, session }
+
+    // Aplanado seguro: Decimals -> numeros primitivos + alias que la UI lee
+    // (initialAmount/openedByName). Se emite tanto al nivel raiz (el panel lee
+    // cashbox.initialAmount directo) como anidado en session (flujo de cierre).
+    const flat = {
+      ...session,
+      openingBalance: Number(session.openingBalance ?? 0),
+      initialAmount: Number(session.openingBalance ?? 0),
+      openedByName: session.openedBy?.name ?? "N/A",
+    }
+    return { ...flat, open: true, session: flat }
   }
 
   async addTransaction(sessionId: string, dto: CreateTransactionDto) {
@@ -280,17 +289,20 @@ export class FinanceService {
     const where: Prisma.ExpenseAuthorizationWhereInput = { status: ExpenseStatus.PENDING_APPROVAL }
     if (approverId) where.requesterId = { not: approverId }
 
-    return this.prisma.expenseAuthorization.findMany({
+    const expenses = await this.prisma.expenseAuthorization.findMany({
       where,
       orderBy: { createdAt: "desc" },
       include: { requester: { select: { id: true, name: true, role: true } } },
     })
+
+    // Alias requestedBy (clave que lee el panel) + Decimal -> numero primitivo
+    return expenses.map((e) => ({ ...e, amount: Number(e.amount), requestedBy: e.requester }))
   }
 
   async getExpenses(filters: ExpenseFiltersDto) {
     const where: Prisma.ExpenseAuthorizationWhereInput = {}
     if (filters.status) where.status = filters.status as ExpenseStatus
-    if (filters.category) where.category = filters.category as any
+    if (filters.category) where.category = filters.category as ExpenseCategory
     if (filters.requesterId) where.requesterId = filters.requesterId
     if (filters.startDate || filters.endDate) {
       where.createdAt = {}
@@ -299,7 +311,7 @@ export class FinanceService {
     }
 
     const page = filters.page || 1
-    const size = filters.size || 20
+    const size = filters.pageSize ?? filters.size ?? 20
     const skip = (page - 1) * size
 
     const [data, total] = await Promise.all([
@@ -500,9 +512,8 @@ export class FinanceService {
 
     const amount = Number(expense.amount)
     if (amount > 500) {
-      const metadata = (expense as any).metadata ?? {}
-      const approvers: string[] =
-        typeof metadata === "object" && Array.isArray(metadata.approvers) ? metadata.approvers : []
+      const metadata: { approvers?: string[] } = expense.rejectionReason ? JSON.parse(expense.rejectionReason) : {}
+      const approvers: string[] = Array.isArray(metadata.approvers) ? metadata.approvers : []
 
       if (approvers.includes(approverId)) {
         throw new ConflictException("Ya aprobaste este gasto. Se requiere un segundo OWNER.")
@@ -512,7 +523,7 @@ export class FinanceService {
       if (approvers.length < 2) {
         await this.prisma.expenseAuthorization.update({
           where: { id: expenseId },
-          data: { rejectionReason: JSON.stringify({ ...metadata, approvers }) } as any,
+          data: { rejectionReason: JSON.stringify({ ...metadata, approvers }) },
         })
         return { status: "PARTIAL_APPROVAL", message: "Primera aprobacion registrada. Se requiere un segundo OWNER." }
       }

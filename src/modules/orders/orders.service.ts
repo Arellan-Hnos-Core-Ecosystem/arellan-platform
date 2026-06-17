@@ -70,7 +70,7 @@ export class OrdersService {
   }
 
   async findAll(filters: OrderFilterDto): Promise<PaginatedResult<unknown>> {
-    const { status, mechanicId, from, to, limit = 20, cursor } = filters
+    const { status, mechanicId, from, to, limit = 20, cursor, page, pageSize } = filters
 
     const where: Prisma.WorkOrderWhereInput = {}
     if (status) where.status = status
@@ -79,6 +79,21 @@ export class OrdersService {
       where.receivedAt = {}
       if (from) where.receivedAt.gte = new Date(from)
       if (to) where.receivedAt.lte = new Date(to)
+    }
+
+    // Modo offset (panel admin: ?page=N&pageSize=M); el modo cursor de abajo
+    // queda intacto para los consumidores existentes
+    if (page !== undefined || pageSize !== undefined) {
+      const size = Math.min(pageSize ?? 10, 100)
+      const currentPage = page ?? 1
+      const pagedOrders = await this.prisma.workOrder.findMany({
+        where,
+        take: size,
+        skip: (currentPage - 1) * size,
+        orderBy: { receivedAt: "desc" },
+        include: ORDER_INCLUDE,
+      })
+      return { data: pagedOrders, nextCursor: null }
     }
 
     const take = limit + 1
@@ -305,9 +320,9 @@ export class OrdersService {
       vehiclePlate: o.vehicle?.plate ?? null,
       vehicleBrand: o.vehicle?.brand ?? null,
       vehicleModel: o.vehicle?.model ?? null,
-      photos: (o as any).photosRel ?? [],
-      timeline: [...((o as any).statusHistory ?? []), ...((o as any).events ?? []) as any[]].sort(
-        (a: any, b: any) =>
+      photos: o.photosRel ?? [],
+      timeline: [...(o.statusHistory ?? []), ...(o.events ?? [])].sort(
+        (a: { timestamp?: Date; createdAt?: Date }, b: { timestamp?: Date; createdAt?: Date }) =>
           new Date(b.timestamp ?? b.createdAt ?? 0).getTime() -
           new Date(a.timestamp ?? a.createdAt ?? 0).getTime(),
       ),

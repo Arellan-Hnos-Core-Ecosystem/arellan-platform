@@ -1,5 +1,5 @@
 import {
-  IsNumber, IsString, IsEnum, IsOptional, IsUrl, IsIn, Min, Max, MinLength, MaxLength, ValidateIf, IsPositive, IsNotEmpty,
+  IsNumber, IsInt, IsString, IsEnum, IsOptional, IsUrl, IsIn, Min, Max, MinLength, MaxLength, ValidateIf, IsPositive, IsNotEmpty,
 } from "class-validator"
 import { Type } from "class-transformer"
 import { TransactionType, PaymentMethod, ExpenseCategory, Currency } from "@prisma/client"
@@ -164,4 +164,12 @@ export class ExpenseFiltersDto {
   @Min(1)
   @Max(100)
   size?: number = 20
+
+  @ApiPropertyOptional({ description: "Alias de size enviado por el panel admin (1-100)", example: 10, minimum: 1, maximum: 100 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  @IsOptional()
+  pageSize?: number
 }

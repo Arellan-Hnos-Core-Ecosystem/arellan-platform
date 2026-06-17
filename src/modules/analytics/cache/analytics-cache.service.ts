@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common"
 import { RedisService } from "../../../common/redis/redis.service"
-import type { ExecutiveSummaryReport } from "../types/executive-summary-report.types"
+import type { ExecutiveSummaryReport } from "@arellan-hnos/business-intelligence-lab"
 
 const EXECUTIVE_SUMMARY_KEY = "analytics:executive-summary"
 const TTL_SECONDS = 15 * 60

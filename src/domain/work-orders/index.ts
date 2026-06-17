@@ -3,4 +3,4 @@ export type { WorkOrderProps, CreateWorkOrderParams } from "./entities/work-orde
 export { OrderStatus } from "./value-objects/order-status.vo";
 export { Money } from "./value-objects/money.vo";
 export type { IWorkOrderRepository, WorkOrderFilters, PagedResult } from "./ports/i-work-order.repository";
-export type { MechanicCycleTimeEntry, MechanicCycleTimeReport } from "./types/mechanic-performance.types";
+export type { MechanicCycleTimeEntry, MechanicCycleTimeReport } from "@arellan-hnos/business-intelligence-lab";

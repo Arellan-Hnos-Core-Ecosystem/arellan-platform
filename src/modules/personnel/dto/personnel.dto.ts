@@ -38,6 +38,14 @@ export class PersonnelFilterDto {
   @Min(1)
   @Max(100)
   limit?: number
+
+  // Alias de limit enviado por el panel admin (?page=1&pageSize=10)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  @IsOptional()
+  pageSize?: number
 }
 
 export class CreatePersonnelDto {

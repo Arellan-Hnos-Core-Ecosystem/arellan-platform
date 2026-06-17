@@ -59,9 +59,28 @@ export class InventoryController {
   @ApiQuery({ name: "lowStock", description: "Solo items con stock bajo (true/false)", required: false, example: "false" })
   @ApiQuery({ name: "limit", description: "Resultados por pagina", required: false })
   @ApiQuery({ name: "cursor", description: "Cursor de paginacion", required: false })
+  @ApiQuery({ name: "search", description: "Busqueda insensible por nombre o SKU", required: false, example: "Faro" })
+  @ApiQuery({ name: "page", description: "Numero de pagina (modo offset)", required: false })
+  @ApiQuery({ name: "pageSize", description: "Resultados por pagina (modo offset)", required: false })
   @ApiResponse({ status: 200, description: "Catalogo de inventario paginado" })
-  findAll(@Query("category") category?: string, @Query("lowStock") lowStock?: string, @Query("limit") limit?: string, @Query("cursor") cursor?: string) {
-    return this.inventoryService.findAll(category, lowStock === "true", limit ? parseInt(limit, 10) : undefined, cursor)
+  findAll(
+    @Query("category") category?: string,
+    @Query("lowStock") lowStock?: string,
+    @Query("limit") limit?: string,
+    @Query("cursor") cursor?: string,
+    @Query("search") search?: string,
+    @Query("page") page?: string,
+    @Query("pageSize") pageSize?: string,
+  ) {
+    return this.inventoryService.findAll(
+      category,
+      lowStock === "true",
+      limit ? parseInt(limit, 10) : undefined,
+      cursor,
+      search,
+      page ? parseInt(page, 10) : undefined,
+      pageSize ? parseInt(pageSize, 10) : undefined,
+    )
   }
 
   @Get(":id")

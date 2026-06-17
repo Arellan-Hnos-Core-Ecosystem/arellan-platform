@@ -1,8 +1,7 @@
 import { Injectable } from "@nestjs/common"
 import { PrismaService } from "../../../common/prisma/prisma.service"
 import { OrderStatus, QuoteStatus, TransactionType } from "@prisma/client"
-import type { ExecutiveSummaryReport } from "../types/executive-summary-report.types"
-import type { MechanicCycleTimeEntry } from "../../../domain/work-orders/types/mechanic-performance.types"
+import type { ExecutiveSummaryReport, MechanicCycleTimeEntry } from "@arellan-hnos/business-intelligence-lab"
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100

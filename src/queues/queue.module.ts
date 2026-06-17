@@ -11,7 +11,7 @@ import { QueueName } from "./queue-names.enum"
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         connection: {
-          host: config.get("REDIS_HOST", "localhost"),
+          host: config.get("REDIS_HOST", "redis"),
           port: config.get("REDIS_PORT", 6379),
           password: config.get("REDIS_PASSWORD"),
         },
