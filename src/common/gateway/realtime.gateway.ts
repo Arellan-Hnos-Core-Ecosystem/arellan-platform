@@ -75,7 +75,23 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
       const userId = payload.sub || payload.id
       const role = payload.role
 
-      ;(client as any).data = { userId, role, email: payload.email }
+      // SEC-05-bis: un privilegiado sin MFA verificada no abre canal realtime
+      // (paridad con el MfaEnforcementInterceptor HTTP).
+      if (["OWNER", "ADMIN", "FINANCE"].includes(role) && payload.mfaVerified !== true) {
+        this.logger.warn(`WS rechazado: ${payload.email ?? userId} (${role}) sin MFA verificada`)
+        client.disconnect()
+        return
+      }
+
+      // SEC-24: se conserva la expiración del JWT del handshake; los handlers
+      // de mensajes la revalidan (getSocketUser) para que un socket no
+      // sobreviva operativo a su token.
+      ;(client as any).data = {
+        userId,
+        role,
+        email: payload.email,
+        tokenExp: typeof payload.exp === "number" ? payload.exp * 1000 : null,
+      }
 
       client.join(`role:${role}`)
       client.join(`user:${userId}`)
@@ -284,7 +300,25 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
   ): { userId: string; role: string; email?: string } | null {
     const data = (client as any).data
     if (!data?.userId || !data?.role) return null
+    // SEC-24: el JWT del handshake pudo expirar con la conexión aún viva; un
+    // socket con token vencido deja de poder operar y se desconecta.
+    if (typeof data.tokenExp === "number" && Date.now() >= data.tokenExp) {
+      this.logger.warn(`WS token expirado para ${data.email ?? data.userId}; desconectando`)
+      client.disconnect()
+      return null
+    }
     return { userId: String(data.userId), role: String(data.role), email: data.email }
+  }
+
+  // SEC-24: usado por AuthService al revocar sesiones (logout-all, force-logout,
+  // cambio de contraseña, activación de MFA) para que los sockets vivos del
+  // usuario no sobrevivan a la revocación.
+  disconnectUser(accountId: string): void {
+    try {
+      this.server?.in(`user:${accountId}`).disconnectSockets(true)
+    } catch (e) {
+      this.logger.error(`No se pudo desconectar sockets de ${accountId}: ${(e as Error).message}`)
+    }
   }
 
   private static parseId(data: unknown, ...keys: string[]): string | undefined {

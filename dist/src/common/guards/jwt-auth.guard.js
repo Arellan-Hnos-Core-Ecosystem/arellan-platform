@@ -12,7 +12,7 @@ const common_1 = require("@nestjs/common");
 const passport_1 = require("@nestjs/passport");
 let JwtAuthGuard = JwtAuthGuard_1 = class JwtAuthGuard extends (0, passport_1.AuthGuard)("jwt") {
     logger = new common_1.Logger(JwtAuthGuard_1.name);
-    handleRequest(err, user, info, context) {
+    handleRequest(err, user, info, _context) {
         if (err || !user) {
             this.logger.warn(`Auth failed: ${info?.message || "no user"}`);
             throw err || new common_1.UnauthorizedException("Token invalido o expirado");

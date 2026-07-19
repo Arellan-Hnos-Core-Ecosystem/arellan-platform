@@ -25,6 +25,7 @@ const orders_dto_1 = require("./dto/orders.dto");
 const complete_work_order_use_case_1 = require("./use-cases/complete-work-order.use-case");
 const jwt_auth_guard_1 = require("../../common/guards/jwt-auth.guard");
 const roles_guard_1 = require("../../common/guards/roles.guard");
+const mfa_required_guard_1 = require("../../common/guards/mfa-required.guard");
 const data_masking_interceptor_1 = require("../../common/interceptors/data-masking.interceptor");
 const roles_decorator_1 = require("../../common/decorators/roles.decorator");
 const current_user_decorator_1 = require("../../common/decorators/current-user.decorator");
@@ -45,7 +46,10 @@ let OrdersController = class OrdersController {
         this.deliverVehicleUseCase = deliverVehicleUseCase;
         this.completeWorkOrderUseCase = completeWorkOrderUseCase;
     }
-    findAll(filters) {
+    findAll(filters, user) {
+        if (user.role === client_1.UserRole.CLIENT) {
+            return this.ordersService.findAllForClient(user.clientId, filters);
+        }
         return this.ordersService.findAll(filters);
     }
     findMyOrders(user, filters) {
@@ -58,16 +62,16 @@ let OrdersController = class OrdersController {
         return this.ordersService.findAll({ status: status });
     }
     findOne(id, user) {
-        return this.ordersService.findOne(id, { id: user.id, role: user.role });
+        return this.ordersService.findOne(id, { id: user.id, role: user.role, clientId: user.clientId });
     }
     create(dto, user) {
         return this.ordersService.create(dto, user.id);
     }
-    update(id, dto) {
-        return this.ordersService.update(id, dto);
+    update(id, dto, user) {
+        return this.ordersService.update(id, dto, { id: user.id, role: user.role });
     }
     updateStatus(id, dto, user) {
-        return this.ordersService.updateStatus(id, dto, user.id);
+        return this.ordersService.updateStatus(id, dto, { id: user.id, role: user.role });
     }
     remove(id) {
         return this.ordersService.softDelete(id);
@@ -75,18 +79,19 @@ let OrdersController = class OrdersController {
     applyDiscount(orderId, dto, user) {
         return this.ordersService.applyDiscount(orderId, dto, user.id, user.role);
     }
-    async uploadPhoto(id, photo, description) {
-        return this.ordersService.uploadPhoto(id, photo, description);
+    async uploadPhoto(id, photo, user, description) {
+        return this.ordersService.uploadPhoto(id, photo, { id: user.id, role: user.role }, description);
     }
     async requestParts(id, dto, user) {
         return this.dispatchPartsUseCase.execute(id, {
             items: dto.items,
             requestedBy: user.id,
             requestedByName: user.name,
+            requesterRole: user.role,
         });
     }
     async reportProgress(id, dto, user) {
-        return this.ordersService.reportProgress(id, dto, user.id, user.name);
+        return this.ordersService.reportProgress(id, dto, { id: user.id, role: user.role }, user.name);
     }
     async completeWorkOrder(id, dto, user) {
         return this.completeWorkOrderUseCase.execute(id, {
@@ -99,7 +104,7 @@ let OrdersController = class OrdersController {
         });
     }
     async deletePhoto(id, photoId, user) {
-        return this.ordersService.deletePhoto(id, photoId, user.id, user.name);
+        return this.ordersService.deletePhoto(id, photoId, { id: user.id, role: user.role }, user.name);
     }
     sendQuote(id, dto, user) {
         return this.sendOrderQuoteUseCase.execute(id, {
@@ -113,12 +118,16 @@ let OrdersController = class OrdersController {
         return this.approveQuoteUseCase.execute(id, {
             clientSignature: dto.clientSignature,
             approverId: user.id,
+            approverRole: user.role,
+            approverClientId: user.clientId,
         });
     }
     rejectQuote(id, dto, user) {
         return this.approveQuoteUseCase.reject(id, {
             reason: dto.reason,
             rejectedBy: user.id,
+            rejectorRole: user.role,
+            rejectorClientId: user.clientId,
         });
     }
     deliverVehicle(id, dto, user) {
@@ -129,28 +138,32 @@ let OrdersController = class OrdersController {
             paymentMethod: dto.paymentMethod,
         });
     }
+    assignMechanicRoute(id, dto) {
+        return this.ordersService.assignMechanic(id, dto.mechanicId);
+    }
     async vehicleCheckin(body, photos, user) {
         return this.ordersService.vehicleCheckin(body, photos ?? [], user?.id ?? "system", user?.name ?? "Sistema");
     }
-    async requestCameraCapture(id, dto) {
-        return this.ordersService.requestCameraCapture(id, dto.position);
+    async requestCameraCapture(id, dto, user) {
+        return this.ordersService.requestCameraCapture(id, dto.position, { id: user.id, role: user.role });
     }
 };
 exports.OrdersController = OrdersController;
 __decorate([
     (0, common_1.Get)(),
-    (0, roles_decorator_1.Roles)(client_1.UserRole.OWNER, client_1.UserRole.ADMIN, client_1.UserRole.FINANCE),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.OWNER, client_1.UserRole.ADMIN, client_1.UserRole.FINANCE, client_1.UserRole.CLIENT),
     (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
     (0, swagger_1.ApiOperation)({
-        summary: "Listar ordenes de trabajo (gestion)",
-        description: "Listado paginado de todas las OT con filtros por estado, mecanico, rango de fechas, cursor. Restringido a OWNER/ADMIN/FINANCE; los mecanicos usan GET /orders/my.",
+        summary: "Listar ordenes de trabajo (gestion / portal cliente)",
+        description: "Gestion (OWNER/ADMIN/FINANCE): listado completo con filtros. CLIENT: solo sus OT (filtrado por el clientId del JWT). Los mecanicos usan GET /orders/my.",
     }),
     (0, swagger_1.ApiResponse)({ status: 200, description: "Listado paginado de ordenes" }),
     (0, swagger_1.ApiResponse)({ status: 401, description: "JWT invalido o expirado" }),
-    (0, swagger_1.ApiResponse)({ status: 403, description: "Solo OWNER, ADMIN o FINANCE" }),
+    (0, swagger_1.ApiResponse)({ status: 403, description: "Rol sin acceso, o cuenta CLIENT sin cliente vinculado" }),
     __param(0, (0, common_1.Query)()),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [orders_dto_1.OrderFilterDto]),
+    __metadata("design:paramtypes", [orders_dto_1.OrderFilterDto, Object]),
     __metadata("design:returntype", void 0)
 ], OrdersController.prototype, "findAll", null);
 __decorate([
@@ -241,8 +254,9 @@ __decorate([
     (0, swagger_1.ApiResponse)({ status: 422, description: "No se puede modificar una OT cancelada" }),
     __param(0, (0, common_1.Param)("id")),
     __param(1, (0, common_1.Body)()),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, orders_dto_1.UpdateOrderDto]),
+    __metadata("design:paramtypes", [String, orders_dto_1.UpdateOrderDto, Object]),
     __metadata("design:returntype", void 0)
 ], OrdersController.prototype, "update", null);
 __decorate([
@@ -317,9 +331,10 @@ __decorate([
     (0, swagger_1.ApiResponse)({ status: 404, description: "OT no encontrada" }),
     __param(0, (0, common_1.Param)("id")),
     __param(1, (0, common_1.UploadedFile)()),
-    __param(2, (0, common_1.Body)("description")),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __param(3, (0, common_1.Body)("description")),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, Object, String]),
+    __metadata("design:paramtypes", [String, Object, Object, String]),
     __metadata("design:returntype", Promise)
 ], OrdersController.prototype, "uploadPhoto", null);
 __decorate([
@@ -472,6 +487,26 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], OrdersController.prototype, "deliverVehicle", null);
 __decorate([
+    (0, common_1.Post)(":id/assign"),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN, client_1.UserRole.OWNER),
+    (0, common_1.UseGuards)(roles_guard_1.RolesGuard, mfa_required_guard_1.MfaRequiredGuard),
+    (0, swagger_1.ApiOperation)({
+        summary: "Asignar/reasignar mecanico a una orden (FUN-17)",
+        description: "Asigna un mecanico (rol MECHANIC/TRAINEE con cuenta ACTIVA) a la OT. Solo ADMIN/OWNER con MFA. Cierra la deriva de contrato: frontend-web ya consumia POST /orders/:id/assign.",
+    }),
+    (0, swagger_1.ApiParam)({ name: "id", description: "ID de la OT (UUID v4)" }),
+    (0, swagger_1.ApiResponse)({ status: 201, description: "Mecanico asignado" }),
+    (0, swagger_1.ApiResponse)({ status: 400, description: "El destinatario no es un mecanico valido" }),
+    (0, swagger_1.ApiResponse)({ status: 403, description: "Solo ADMIN/OWNER con MFA" }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: "OT no encontrada" }),
+    (0, swagger_1.ApiResponse)({ status: 409, description: "OT finalizada o cancelada" }),
+    __param(0, (0, common_1.Param)("id")),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, orders_dto_1.AssignMechanicDto]),
+    __metadata("design:returntype", void 0)
+], OrdersController.prototype, "assignMechanicRoute", null);
+__decorate([
     (0, common_1.Post)("checkin"),
     (0, roles_decorator_1.Roles)(client_1.UserRole.MECHANIC, client_1.UserRole.TRAINEE, client_1.UserRole.ADMIN, client_1.UserRole.OWNER),
     (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
@@ -515,8 +550,9 @@ __decorate([
     (0, swagger_1.ApiResponse)({ status: 404, description: "OT no encontrada" }),
     __param(0, (0, common_1.Param)("id")),
     __param(1, (0, common_1.Body)()),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, orders_dto_1.RequestCameraCaptureDto]),
+    __metadata("design:paramtypes", [String, orders_dto_1.RequestCameraCaptureDto, Object]),
     __metadata("design:returntype", Promise)
 ], OrdersController.prototype, "requestCameraCapture", null);
 exports.OrdersController = OrdersController = __decorate([

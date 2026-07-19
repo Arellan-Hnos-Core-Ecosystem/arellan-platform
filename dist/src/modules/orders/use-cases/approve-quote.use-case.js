@@ -8,18 +8,24 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var ApproveQuoteUseCase_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ApproveQuoteUseCase = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../../common/prisma/prisma.service");
 const realtime_gateway_1 = require("../../../common/gateway/realtime.gateway");
 const client_1 = require("@prisma/client");
-let ApproveQuoteUseCase = class ApproveQuoteUseCase {
+let ApproveQuoteUseCase = ApproveQuoteUseCase_1 = class ApproveQuoteUseCase {
     prisma;
     wsGateway;
     constructor(prisma, wsGateway) {
         this.prisma = prisma;
         this.wsGateway = wsGateway;
+    }
+    static assertClientOwnership(order, requester) {
+        if (requester.role === "CLIENT" && order.clientId !== requester.clientId) {
+            throw new common_1.NotFoundException("Orden de trabajo no encontrada");
+        }
     }
     async execute(orderId, params) {
         const order = await this.prisma.workOrder.findUnique({
@@ -32,6 +38,10 @@ let ApproveQuoteUseCase = class ApproveQuoteUseCase {
         });
         if (!order)
             throw new common_1.NotFoundException("Orden de trabajo no encontrada");
+        ApproveQuoteUseCase_1.assertClientOwnership(order, {
+            role: params.approverRole,
+            clientId: params.approverClientId,
+        });
         if (order.status !== client_1.OrderStatus.BUDGETED) {
             throw new common_1.ConflictException(`Solo se puede aprobar cotizaciones en estado BUDGETED. Estado actual: ${order.status}`);
         }
@@ -107,6 +117,10 @@ let ApproveQuoteUseCase = class ApproveQuoteUseCase {
         });
         if (!order)
             throw new common_1.NotFoundException("Orden de trabajo no encontrada");
+        ApproveQuoteUseCase_1.assertClientOwnership(order, {
+            role: params.rejectorRole,
+            clientId: params.rejectorClientId,
+        });
         if (!order.quote || order.quote.status !== client_1.QuoteStatus.SENT) {
             throw new common_1.BadRequestException("No hay cotización SENT activa para rechazar");
         }
@@ -129,7 +143,7 @@ let ApproveQuoteUseCase = class ApproveQuoteUseCase {
     }
 };
 exports.ApproveQuoteUseCase = ApproveQuoteUseCase;
-exports.ApproveQuoteUseCase = ApproveQuoteUseCase = __decorate([
+exports.ApproveQuoteUseCase = ApproveQuoteUseCase = ApproveQuoteUseCase_1 = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
         realtime_gateway_1.RealtimeGateway])

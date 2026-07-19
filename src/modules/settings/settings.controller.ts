@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards } from "@nestjs/common"
+import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards } from "@nestjs/common"
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam } from "@nestjs/swagger"
 import { SettingsService } from "./settings.service"
 import { CreateSettingDto, UpdateSettingDto } from "./dto/settings.dto"

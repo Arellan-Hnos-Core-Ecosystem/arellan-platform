@@ -1,11 +1,12 @@
 import { FinanceService } from "./finance.service";
 import { CloseCashboxSessionUseCase } from "./use-cases/close-cashbox-session.use-case";
-import { AuthUser } from "../auth/auth.service";
+import { AuthService, AuthUser } from "../auth/auth.service";
 import { OpenCashboxDto, CloseCashboxDto, CreateTransactionDto, CreateExpenseDto, ApproveExpenseDto, ExpenseFiltersDto, CashboxOverrideDto } from "./dto/finance.dto";
 export declare class FinanceController {
     private readonly financeService;
     private readonly closeCashboxSessionUseCase;
-    constructor(financeService: FinanceService, closeCashboxSessionUseCase: CloseCashboxSessionUseCase);
+    private readonly authService;
+    constructor(financeService: FinanceService, closeCashboxSessionUseCase: CloseCashboxSessionUseCase, authService: AuthService);
     openCashbox(user: AuthUser, dto: OpenCashboxDto): Promise<{
         openedBy: {
             id: string;

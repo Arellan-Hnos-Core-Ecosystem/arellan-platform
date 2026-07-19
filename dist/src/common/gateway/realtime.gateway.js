@@ -42,7 +42,18 @@ let RealtimeGateway = RealtimeGateway_1 = class RealtimeGateway {
             const payload = this.jwtService.verify(token);
             const userId = payload.sub || payload.id;
             const role = payload.role;
-            client.data = { userId, role, email: payload.email };
+            if (["OWNER", "ADMIN", "FINANCE"].includes(role) && payload.mfaVerified !== true) {
+                this.logger.warn(`WS rechazado: ${payload.email ?? userId} (${role}) sin MFA verificada`);
+                client.disconnect();
+                return;
+            }
+            ;
+            client.data = {
+                userId,
+                role,
+                email: payload.email,
+                tokenExp: typeof payload.exp === "number" ? payload.exp * 1000 : null,
+            };
             client.join(`role:${role}`);
             client.join(`user:${userId}`);
             if (role === "MECHANIC" || role === "TRAINEE") {
@@ -152,7 +163,20 @@ let RealtimeGateway = RealtimeGateway_1 = class RealtimeGateway {
         const data = client.data;
         if (!data?.userId || !data?.role)
             return null;
+        if (typeof data.tokenExp === "number" && Date.now() >= data.tokenExp) {
+            this.logger.warn(`WS token expirado para ${data.email ?? data.userId}; desconectando`);
+            client.disconnect();
+            return null;
+        }
         return { userId: String(data.userId), role: String(data.role), email: data.email };
+    }
+    disconnectUser(accountId) {
+        try {
+            this.server?.in(`user:${accountId}`).disconnectSockets(true);
+        }
+        catch (e) {
+            this.logger.error(`No se pudo desconectar sockets de ${accountId}: ${e.message}`);
+        }
     }
     static parseId(data, ...keys) {
         if (typeof data === "string")

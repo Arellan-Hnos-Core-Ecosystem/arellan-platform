@@ -4,7 +4,7 @@ import { ApproveQuoteUseCase } from "./use-cases/approve-quote.use-case";
 import { DispatchPartsToOrderUseCase } from "./use-cases/dispatch-parts-to-order.use-case";
 import { DeliverVehicleUseCase } from "./use-cases/deliver-vehicle.use-case";
 import { AuthUser } from "../auth/auth.service";
-import { CreateOrderDto, UpdateOrderDto, UpdateStatusDto, OrderFilterDto, ApplyDiscountDto, RequestPartsDto, MechanicProgressDto, VehicleCheckinDto, SendQuoteDto, ApproveQuoteDto, RejectQuoteDto, DeliverOrderDto, CompleteWorkOrderDto, RequestCameraCaptureDto } from "./dto/orders.dto";
+import { CreateOrderDto, UpdateOrderDto, UpdateStatusDto, OrderFilterDto, ApplyDiscountDto, RequestPartsDto, MechanicProgressDto, VehicleCheckinDto, SendQuoteDto, ApproveQuoteDto, RejectQuoteDto, DeliverOrderDto, CompleteWorkOrderDto, RequestCameraCaptureDto, AssignMechanicDto } from "./dto/orders.dto";
 import { CompleteWorkOrderUseCase } from "./use-cases/complete-work-order.use-case";
 export declare class OrdersController {
     private readonly ordersService;
@@ -14,7 +14,7 @@ export declare class OrdersController {
     private readonly deliverVehicleUseCase;
     private readonly completeWorkOrderUseCase;
     constructor(ordersService: OrdersService, sendOrderQuoteUseCase: SendOrderQuoteUseCase, approveQuoteUseCase: ApproveQuoteUseCase, dispatchPartsUseCase: DispatchPartsToOrderUseCase, deliverVehicleUseCase: DeliverVehicleUseCase, completeWorkOrderUseCase: CompleteWorkOrderUseCase);
-    findAll(filters: OrderFilterDto): Promise<import("./dto/orders.dto").PaginatedResult<unknown>>;
+    findAll(filters: OrderFilterDto, user: AuthUser): Promise<import("./dto/orders.dto").PaginatedResult<unknown>>;
     findMyOrders(user: AuthUser, filters: OrderFilterDto): Promise<import("./dto/orders.dto").PaginatedResult<unknown>>;
     getSummaryStats(): Promise<{
         activeOrders: number;
@@ -34,6 +34,7 @@ export declare class OrdersController {
             createdAt: Date;
             updatedAt: Date;
             deletedAt: Date | null;
+            accountId: string | null;
             dni: string | null;
             firstName: string;
             lastName: string | null;
@@ -197,6 +198,7 @@ export declare class OrdersController {
             createdAt: Date;
             updatedAt: Date;
             deletedAt: Date | null;
+            accountId: string | null;
             dni: string | null;
             firstName: string;
             lastName: string | null;
@@ -279,13 +281,14 @@ export declare class OrdersController {
         createdBy: string;
         updatedBy: string | null;
     }>;
-    update(id: string, dto: UpdateOrderDto): Promise<{
+    update(id: string, dto: UpdateOrderDto, user: AuthUser): Promise<{
         client: {
             id: string;
             email: string | null;
             createdAt: Date;
             updatedAt: Date;
             deletedAt: Date | null;
+            accountId: string | null;
             dni: string | null;
             firstName: string;
             lastName: string | null;
@@ -375,6 +378,7 @@ export declare class OrdersController {
             createdAt: Date;
             updatedAt: Date;
             deletedAt: Date | null;
+            accountId: string | null;
             dni: string | null;
             firstName: string;
             lastName: string | null;
@@ -464,6 +468,7 @@ export declare class OrdersController {
             createdAt: Date;
             updatedAt: Date;
             deletedAt: Date | null;
+            accountId: string | null;
             dni: string | null;
             firstName: string;
             lastName: string | null;
@@ -589,7 +594,7 @@ export declare class OrdersController {
         message: string;
         approvalId: string;
     }>;
-    uploadPhoto(id: string, photo: Express.Multer.File, description?: string): Promise<{
+    uploadPhoto(id: string, photo: Express.Multer.File, user: AuthUser, description?: string): Promise<{
         success: boolean;
         url: string;
     }>;
@@ -659,10 +664,100 @@ export declare class OrdersController {
         deliveredAt: string;
         transactionSessionId: string;
     }>;
+    assignMechanicRoute(id: string, dto: AssignMechanicDto): Promise<{
+        client: {
+            id: string;
+            email: string | null;
+            createdAt: Date;
+            updatedAt: Date;
+            deletedAt: Date | null;
+            accountId: string | null;
+            dni: string | null;
+            firstName: string;
+            lastName: string | null;
+            phone: string;
+            address: string | null;
+            notes: string | null;
+            ruc: string | null;
+            type: import("@prisma/client").$Enums.ClientType;
+            companyName: string | null;
+            phone2: string | null;
+            district: string | null;
+            city: string;
+            source: string | null;
+            creditLimit: import("@prisma/client/runtime/library").Decimal | null;
+            creditBalance: import("@prisma/client/runtime/library").Decimal;
+            isVip: boolean;
+        };
+        vehicle: {
+            id: string;
+            status: import("@prisma/client").$Enums.VehicleStatus;
+            createdAt: Date;
+            updatedAt: Date;
+            notes: string | null;
+            plate: string;
+            brand: string;
+            model: string;
+            year: number;
+            color: string | null;
+            vin: string | null;
+            engineType: import("@prisma/client").$Enums.EngineType;
+            engineCC: number | null;
+            mileage: number | null;
+            fuelType: import("@prisma/client").$Enums.FuelType;
+            transmission: import("@prisma/client").$Enums.TransmissionType;
+            clientId: string;
+            photos: string[];
+        };
+        mechanic: {
+            id: string;
+            email: string;
+            role: import("@prisma/client").$Enums.UserRole;
+            name: string;
+        } | null;
+    } & {
+        number: string;
+        id: string;
+        status: import("@prisma/client").$Enums.OrderStatus;
+        createdAt: Date;
+        updatedAt: Date;
+        description: string;
+        type: import("@prisma/client").$Enums.ServiceType;
+        clientId: string;
+        photos: string[];
+        vehicleId: string;
+        mechanicId: string | null;
+        priority: import("@prisma/client").$Enums.Priority;
+        diagnosis: string | null;
+        recommendation: string | null;
+        odometerIn: number | null;
+        odometerOut: number | null;
+        fuelLevel: string | null;
+        laborCost: import("@prisma/client/runtime/library").Decimal | null;
+        partsCost: import("@prisma/client/runtime/library").Decimal | null;
+        totalCost: import("@prisma/client/runtime/library").Decimal | null;
+        discount: import("@prisma/client/runtime/library").Decimal;
+        tax: import("@prisma/client/runtime/library").Decimal;
+        finalAmount: import("@prisma/client/runtime/library").Decimal;
+        receivedAt: Date;
+        estimatedDelivery: Date | null;
+        startedAt: Date | null;
+        completedAt: Date | null;
+        deliveredAt: Date | null;
+        paymentStatus: import("@prisma/client").$Enums.InvoiceStatus;
+        customerNotes: string | null;
+        internalNotes: string | null;
+        signature: string | null;
+        warrantyDays: number;
+        paymentReceivedBy: string | null;
+        paymentYape: string | null;
+        createdBy: string;
+        updatedBy: string | null;
+    }>;
     vehicleCheckin(body: VehicleCheckinDto, photos?: Express.Multer.File[], user?: AuthUser): Promise<{
         success: boolean;
         orderId: string;
         orderNumber: string;
     }>;
-    requestCameraCapture(id: string, dto: RequestCameraCaptureDto): Promise<any>;
+    requestCameraCapture(id: string, dto: RequestCameraCaptureDto, user: AuthUser): Promise<any>;
 }

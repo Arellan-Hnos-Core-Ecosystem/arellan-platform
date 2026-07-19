@@ -32,10 +32,14 @@ let DispatchPartsToOrderUseCase = class DispatchPartsToOrderUseCase {
     async execute(orderId, params) {
         const order = await this.prisma.workOrder.findUnique({
             where: { id: orderId },
-            select: { id: true, number: true, status: true },
+            select: { id: true, number: true, status: true, mechanicId: true },
         });
         if (!order)
             throw new common_1.NotFoundException("Orden de trabajo no encontrada");
+        if ((params.requesterRole === "MECHANIC" || params.requesterRole === "TRAINEE") &&
+            order.mechanicId !== params.requestedBy) {
+            throw new common_1.NotFoundException("Orden de trabajo no encontrada");
+        }
         if (order.status !== "IN_PROGRESS") {
             throw new common_1.HttpException({
                 statusCode: 422,

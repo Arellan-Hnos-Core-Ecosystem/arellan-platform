@@ -47,7 +47,7 @@ export class CommissionsService {
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) }
   }
 
-  async create(dto: CreateCommissionDto, requestingUserRole: string, requestingUserId: string) {
+  async create(dto: CreateCommissionDto, requestingUserRole: string, _requestingUserId: string) {
     if (requestingUserRole !== "OWNER") {
       throw new ForbiddenException("Solo el OWNER puede crear comisiones")
     }

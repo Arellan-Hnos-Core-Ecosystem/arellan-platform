@@ -57,6 +57,7 @@ export declare class InvoicesService {
             createdAt: Date;
             updatedAt: Date;
             deletedAt: Date | null;
+            accountId: string | null;
             dni: string | null;
             firstName: string;
             lastName: string | null;
@@ -229,7 +230,7 @@ export declare class InvoicesService {
         cancelledAt: Date | null;
         cancelReason: string | null;
     }>;
-    issue(id: string, userId: string): Promise<{
+    issue(id: string, _userId: string): Promise<{
         number: string;
         id: string;
         status: import("@prisma/client").$Enums.InvoiceStatus;

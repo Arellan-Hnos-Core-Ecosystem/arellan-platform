@@ -15,12 +15,13 @@ const finance_service_1 = require("./finance.service");
 const close_cashbox_session_use_case_1 = require("./use-cases/close-cashbox-session.use-case");
 const cache_manager_service_1 = require("../../common/cache/cache-manager.service");
 const realtime_module_1 = require("../../common/gateway/realtime.module");
+const auth_module_1 = require("../auth/auth.module");
 let FinanceModule = class FinanceModule {
 };
 exports.FinanceModule = FinanceModule;
 exports.FinanceModule = FinanceModule = __decorate([
     (0, common_1.Module)({
-        imports: [realtime_module_1.RealtimeModule],
+        imports: [realtime_module_1.RealtimeModule, auth_module_1.AuthModule],
         controllers: [finance_controller_1.FinanceController, alerts_controller_1.AlertsController, payment_webhook_controller_1.PaymentWebhookController],
         providers: [
             finance_service_1.FinanceService,

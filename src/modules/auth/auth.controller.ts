@@ -112,8 +112,11 @@ export class AuthController {
   })
   @ApiResponse({ status: 200, description: "Secreto MFA generado - retorna secret y otpauth URL" })
   @ApiResponse({ status: 401, description: "JWT invalido o expirado" })
+  @ApiResponse({ status: 403, description: "Regenerar MFA activa exige sesion con TOTP verificado (SEC-25)" })
   generateMfa(@CurrentUser() user: AuthUser) {
-    return this.authService.generateMfaSecret(user.id)
+    // SEC-25: el servicio exige mfaVerified=true si la cuenta ya tiene MFA
+    // activa, y no toca el secreto vigente hasta confirmar el nuevo.
+    return this.authService.generateMfaSecret(user)
   }
 
   @Post("mfa/confirm")

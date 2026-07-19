@@ -405,7 +405,7 @@ export declare class PersonnelService {
         name: string;
         status: import("@prisma/client").$Enums.AccountStatus;
     }>;
-    checkInByUser(userId: string, notes?: string): Promise<{
+    checkInByUser(userId: string, _notes?: string): Promise<{
         id: string;
         createdAt: Date;
         updatedAt: Date;
@@ -417,7 +417,7 @@ export declare class PersonnelService {
         checkOut: Date | null;
         verifiedBy: string | null;
     }>;
-    checkOutByUser(userId: string, notes?: string): Promise<{
+    checkOutByUser(userId: string, _notes?: string): Promise<{
         id: string;
         createdAt: Date;
         updatedAt: Date;

@@ -2,12 +2,11 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
-  BadRequestException,
   Logger,
 } from "@nestjs/common"
 import { PrismaService } from "../../common/prisma/prisma.service"
-import { Prisma, InvoiceStatus, InvoiceType, OrderStatus } from "@prisma/client"
-import { InvoiceFilterDto, CreateInvoiceDto } from "./dto/invoices.dto"
+import { Prisma, InvoiceStatus, InvoiceType } from "@prisma/client"
+import { InvoiceFilterDto } from "./dto/invoices.dto"
 
 @Injectable()
 export class InvoicesService {
@@ -132,7 +131,7 @@ export class InvoicesService {
     return invoice
   }
 
-  async issue(id: string, userId: string) {
+  async issue(id: string, _userId: string) {
     const invoice = await this.prisma.invoice.findUnique({ where: { id } })
     if (!invoice) {
       throw new NotFoundException("Factura no encontrada")

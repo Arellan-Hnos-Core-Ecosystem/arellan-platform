@@ -39,7 +39,7 @@ export declare class CommissionsService {
         limit: number;
         totalPages: number;
     }>;
-    create(dto: CreateCommissionDto, requestingUserRole: string, requestingUserId: string): Promise<{
+    create(dto: CreateCommissionDto, requestingUserRole: string, _requestingUserId: string): Promise<{
         personnel: {
             id: string;
             firstName: string;

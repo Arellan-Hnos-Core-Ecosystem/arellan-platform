@@ -16,21 +16,33 @@ const jwt_1 = require("@nestjs/jwt");
 const config_1 = require("@nestjs/config");
 const prisma_service_1 = require("../../common/prisma/prisma.service");
 const redis_service_1 = require("../../common/redis/redis.service");
+const secret_cipher_service_1 = require("../../common/crypto/secret-cipher.service");
+const realtime_gateway_1 = require("../../common/gateway/realtime.gateway");
 const bcrypt = require("bcryptjs");
 const crypto_1 = require("crypto");
 const otplib_1 = require("otplib");
 const client_1 = require("@prisma/client");
+const PRIVILEGED_ROLES = [client_1.UserRole.OWNER, client_1.UserRole.ADMIN, client_1.UserRole.FINANCE];
+const MFA_PENDING_PREFIX = "mfa:pending:";
+const MFA_PENDING_TTL_SECONDS = 600;
 let AuthService = AuthService_1 = class AuthService {
     prisma;
     jwt;
     config;
     redis;
+    secretCipher;
+    realtimeGateway;
     logger = new common_1.Logger(AuthService_1.name);
-    constructor(prisma, jwt, config, redis) {
+    constructor(prisma, jwt, config, redis, secretCipher, realtimeGateway) {
         this.prisma = prisma;
         this.jwt = jwt;
         this.config = config;
         this.redis = redis;
+        this.secretCipher = secretCipher;
+        this.realtimeGateway = realtimeGateway;
+    }
+    static hashToken(token) {
+        return (0, crypto_1.createHash)("sha256").update(token).digest("hex");
     }
     async login(dto, ip, userAgent) {
         const account = await this.prisma.account.findUnique({
@@ -69,7 +81,15 @@ let AuthService = AuthService_1 = class AuthService {
                 message: "Ingresa el codigo de autenticacion de tu app 2FA",
             };
         }
-        return this.generateTokens(account, false, ip, userAgent);
+        const result = await this.generateTokens(account, false, ip, userAgent);
+        if (PRIVILEGED_ROLES.includes(account.role) && !account.mfaEnabled) {
+            return {
+                ...result,
+                mfaEnrollmentRequired: true,
+                message: "Tu rol requiere MFA. Configura tu autenticador antes de operar.",
+            };
+        }
+        return result;
     }
     async mechanicLogin(pin, ip, userAgent) {
         const personnel = await this.prisma.personnel.findUnique({
@@ -115,7 +135,7 @@ let AuthService = AuthService_1 = class AuthService {
         }
         const isValid = otplib_1.authenticator.verify({
             token: dto.token,
-            secret: account.mfaSecret,
+            secret: this.secretCipher.decrypt(account.mfaSecret),
         });
         if (!isValid) {
             throw new common_1.UnauthorizedException("Codigo MFA invalido");
@@ -123,36 +143,66 @@ let AuthService = AuthService_1 = class AuthService {
         this.logger.log(`MFA verified for ${account.email}`);
         return this.generateTokens(account, true);
     }
-    async generateMfaSecret(userId) {
-        const account = await this.prisma.account.findUnique({ where: { id: userId } });
+    async generateMfaSecret(user) {
+        const account = await this.prisma.account.findUnique({ where: { id: user.id } });
         if (!account) {
             throw new common_1.NotFoundException("Usuario no encontrado");
         }
+        if (account.mfaEnabled && user.mfaVerified !== true) {
+            throw new common_1.ForbiddenException({
+                message: "Para regenerar el MFA debes iniciar sesion completando tu TOTP actual",
+                code: "MFA_REQUIRED",
+            });
+        }
         const secret = otplib_1.authenticator.generateSecret();
         const otpauth = otplib_1.authenticator.keyuri(account.email, this.config.get("MFA_ISSUER", "ArellanHnos"), secret);
-        await this.prisma.account.update({
-            where: { id: userId },
-            data: { mfaSecret: secret, mfaEnabled: false },
+        await this.redis.set(`${MFA_PENDING_PREFIX}${account.id}`, this.secretCipher.encrypt(secret), MFA_PENDING_TTL_SECONDS);
+        await this.prisma.auditLog.create({
+            data: {
+                userId: account.id,
+                userName: account.name,
+                role: account.role,
+                action: "MFA_ENROLL_STARTED",
+                entity: "Account",
+                entityId: account.id,
+                severity: "INFO",
+                ipAddress: "system",
+            },
         });
         return { secret, otpauth };
     }
     async confirmMfaSetup(userId, token) {
         const account = await this.prisma.account.findUnique({ where: { id: userId } });
-        if (!account || !account.mfaSecret) {
-            throw new common_1.NotFoundException("MFA no configurada");
+        if (!account)
+            throw new common_1.NotFoundException("Usuario no encontrado");
+        const pendingEncrypted = await this.redis.get(`${MFA_PENDING_PREFIX}${userId}`);
+        if (!pendingEncrypted) {
+            throw new common_1.NotFoundException("No hay un enrolamiento MFA pendiente. Genera un secreto primero.");
         }
-        const isValid = otplib_1.authenticator.verify({
-            token,
-            secret: account.mfaSecret,
-        });
+        const pendingSecret = this.secretCipher.decrypt(pendingEncrypted);
+        const isValid = otplib_1.authenticator.verify({ token, secret: pendingSecret });
         if (!isValid) {
             throw new common_1.UnauthorizedException("Codigo MFA invalido");
         }
         await this.prisma.account.update({
             where: { id: userId },
-            data: { mfaEnabled: true },
+            data: { mfaSecret: this.secretCipher.encrypt(pendingSecret), mfaEnabled: true },
         });
-        return { message: "MFA activada correctamente" };
+        await this.redis.del(`${MFA_PENDING_PREFIX}${userId}`);
+        await this.revokeAllUserSessions(userId);
+        await this.prisma.auditLog.create({
+            data: {
+                userId,
+                userName: account.name,
+                role: account.role,
+                action: "MFA_ENABLED",
+                entity: "Account",
+                entityId: userId,
+                severity: "WARNING",
+                ipAddress: "system",
+            },
+        });
+        return { message: "MFA activada correctamente. Vuelve a iniciar sesion con tu codigo TOTP." };
     }
     async register(dto) {
         const existing = await this.prisma.account.findUnique({ where: { email: dto.email } });
@@ -186,11 +236,7 @@ let AuthService = AuthService_1 = class AuthService {
             where: { id: userId },
             data: { passwordHash },
         });
-        await this.prisma.refreshToken.updateMany({
-            where: { accountId: userId, revoked: false },
-            data: { revoked: true },
-        });
-        await this.invalidateAllSessions(userId);
+        await this.revokeAllUserSessions(userId);
         await this.prisma.auditLog.create({
             data: {
                 userId,
@@ -215,38 +261,56 @@ let AuthService = AuthService_1 = class AuthService {
         catch {
             throw new common_1.UnauthorizedException("Refresh token invalido o expirado");
         }
+        const tokenHash = AuthService_1.hashToken(refreshToken);
         const stored = await this.prisma.refreshToken.findUnique({
-            where: { token: refreshToken },
+            where: { token: tokenHash },
             include: { account: true },
         });
-        if (!stored || stored.revoked || new Date() > stored.expiresAt) {
+        if (!stored) {
+            throw new common_1.UnauthorizedException("Refresh token revocado");
+        }
+        if (stored.revoked) {
+            await this.revokeAllUserSessions(stored.accountId);
+            await this.prisma.auditLog.create({
+                data: {
+                    userId: stored.accountId,
+                    userName: stored.account.name,
+                    role: stored.account.role,
+                    action: "REFRESH_TOKEN_REUSE_DETECTED",
+                    entity: "RefreshToken",
+                    entityId: stored.id,
+                    severity: "SECURITY_ALERT",
+                    ipAddress: stored.ipAddress ?? "unknown",
+                },
+            });
+            throw new common_1.UnauthorizedException("Refresh token revocado");
+        }
+        if (new Date() > stored.expiresAt) {
             throw new common_1.UnauthorizedException("Refresh token revocado");
         }
         await this.prisma.refreshToken.update({
             where: { id: stored.id },
             data: { revoked: true },
         });
-        return this.generateTokens(stored.account, false, stored.ipAddress || undefined, stored.deviceInfo || undefined);
+        const mfaVerified = payload.mfaVerified === true;
+        return this.generateTokens(stored.account, mfaVerified, stored.ipAddress || undefined, stored.deviceInfo || undefined);
     }
     async logout(refreshToken) {
+        const tokenHash = AuthService_1.hashToken(refreshToken);
         const stored = await this.prisma.refreshToken.findUnique({
-            where: { token: refreshToken },
+            where: { token: tokenHash },
         });
         if (stored) {
-            await this.invalidateSession(stored.accountId, refreshToken);
+            await this.invalidateSession(stored.accountId, stored.token);
         }
         await this.prisma.refreshToken.updateMany({
-            where: { token: refreshToken },
+            where: { token: tokenHash },
             data: { revoked: true },
         });
         return { message: "Sesion cerrada correctamente" };
     }
     async forceLogoutUser(targetUserId, performerId) {
-        await this.prisma.refreshToken.updateMany({
-            where: { accountId: targetUserId, revoked: false },
-            data: { revoked: true },
-        });
-        await this.invalidateAllSessions(targetUserId);
+        await this.revokeAllUserSessions(targetUserId);
         this.logger.log(`Force logout of user ${targetUserId} by ${performerId}`);
         return { message: "Sesion cerrada forzosamente" };
     }
@@ -259,18 +323,25 @@ let AuthService = AuthService_1 = class AuthService {
             throw new common_1.NotFoundException("Usuario no encontrado");
         return account;
     }
-    async storeSession(accountId, token) {
-        const tokenHash = (0, crypto_1.createHash)("sha256").update(token).digest("hex");
-        await this.redis.set(`session:${accountId}:${token}`, tokenHash, 604800);
+    async storeSession(accountId, tokenHash) {
+        await this.redis.set(`session:${accountId}:${tokenHash}`, tokenHash, 604800);
     }
-    async invalidateSession(accountId, token) {
-        await this.redis.del(`session:${accountId}:${token}`);
+    async invalidateSession(accountId, tokenHash) {
+        await this.redis.del(`session:${accountId}:${tokenHash}`);
     }
     async invalidateAllSessions(accountId) {
         const keys = await this.scanKeys(`session:${accountId}:*`);
         if (keys.length > 0) {
             await this.redis.client.del(...keys);
         }
+    }
+    async revokeAllUserSessions(accountId) {
+        await this.prisma.refreshToken.updateMany({
+            where: { accountId, revoked: false },
+            data: { revoked: true },
+        });
+        await this.invalidateAllSessions(accountId);
+        this.realtimeGateway.disconnectUser(accountId);
     }
     async getActiveSessions(accountId) {
         const keys = await this.scanKeys(`session:${accountId}:*`);
@@ -283,11 +354,7 @@ let AuthService = AuthService_1 = class AuthService {
         const account = await this.prisma.account.findUnique({ where: { id: accountId } });
         if (!account)
             throw new common_1.NotFoundException("Usuario no encontrado");
-        await this.invalidateAllSessions(accountId);
-        await this.prisma.refreshToken.updateMany({
-            where: { accountId, revoked: false },
-            data: { revoked: true },
-        });
+        await this.revokeAllUserSessions(accountId);
         await this.prisma.auditLog.create({
             data: {
                 userId: accountId,
@@ -306,7 +373,6 @@ let AuthService = AuthService_1 = class AuthService {
             where: { accountId: userId, revoked: false },
             select: {
                 id: true,
-                token: true,
                 expiresAt: true,
                 deviceInfo: true,
                 ipAddress: true,
@@ -337,30 +403,50 @@ let AuthService = AuthService_1 = class AuthService {
             throw new common_1.NotFoundException("Usuario no encontrado");
         return account;
     }
+    async verifyTotpForAccount(accountId, token) {
+        const account = await this.prisma.account.findUnique({
+            where: { id: accountId },
+            select: { mfaEnabled: true, mfaSecret: true },
+        });
+        if (!account?.mfaEnabled || !account.mfaSecret)
+            return false;
+        return otplib_1.authenticator.verify({ token, secret: this.secretCipher.decrypt(account.mfaSecret) });
+    }
     async generateTokens(account, mfaVerified = false, ip, userAgent) {
-        const requiresMfa = ["OWNER", "ADMIN", "FINANCE"].includes(account.role);
+        const requiresMfa = PRIVILEGED_ROLES.includes(account.role);
+        const effectiveMfaVerified = mfaVerified || !requiresMfa;
+        let clientId = null;
+        if (account.role === client_1.UserRole.CLIENT) {
+            const client = await this.prisma.client.findUnique({
+                where: { accountId: account.id },
+                select: { id: true },
+            });
+            clientId = client?.id ?? null;
+        }
         const payload = {
             id: account.id,
             email: account.email,
             role: account.role,
             name: account.name,
-            mfaVerified: mfaVerified || !requiresMfa,
+            mfaVerified: effectiveMfaVerified,
+            ...(account.role === client_1.UserRole.CLIENT ? { clientId } : {}),
         };
         const accessToken = this.jwt.sign(payload, {
             secret: this.config.get("JWT_ACCESS_SECRET"),
             expiresIn: this.config.get("JWT_ACCESS_TTL", "15m"),
         });
-        const refreshToken = this.jwt.sign({ sub: account.id }, { secret: this.config.get("JWT_REFRESH_SECRET"), expiresIn: this.config.get("JWT_REFRESH_TTL", "7d") });
+        const refreshToken = this.jwt.sign({ sub: account.id, mfaVerified: effectiveMfaVerified }, { secret: this.config.get("JWT_REFRESH_SECRET"), expiresIn: this.config.get("JWT_REFRESH_TTL", "7d") });
+        const tokenHash = AuthService_1.hashToken(refreshToken);
         await this.prisma.refreshToken.create({
             data: {
-                token: refreshToken,
+                token: tokenHash,
                 accountId: account.id,
                 expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
                 ipAddress: ip,
                 deviceInfo: userAgent,
             },
         });
-        await this.storeSession(account.id, refreshToken);
+        await this.storeSession(account.id, tokenHash);
         this.logger.log(`Session created for ${account.email}`);
         return {
             accessToken,
@@ -385,6 +471,8 @@ exports.AuthService = AuthService = AuthService_1 = __decorate([
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
         jwt_1.JwtService,
         config_1.ConfigService,
-        redis_service_1.RedisService])
+        redis_service_1.RedisService,
+        secret_cipher_service_1.SecretCipherService,
+        realtime_gateway_1.RealtimeGateway])
 ], AuthService);
 //# sourceMappingURL=auth.service.js.map

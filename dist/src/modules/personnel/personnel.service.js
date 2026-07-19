@@ -516,13 +516,13 @@ let PersonnelService = PersonnelService_1 = class PersonnelService {
         this.logger.log(`Estado de ${updated.email} cambiado a ${status}`);
         return updated;
     }
-    async checkInByUser(userId, notes) {
+    async checkInByUser(userId, _notes) {
         const personnel = await this.prisma.personnel.findUnique({ where: { accountId: userId } });
         if (!personnel)
             throw new common_1.NotFoundException("Personal no encontrado para este usuario");
         return this.checkIn(personnel.id);
     }
-    async checkOutByUser(userId, notes) {
+    async checkOutByUser(userId, _notes) {
         const personnel = await this.prisma.personnel.findUnique({ where: { accountId: userId } });
         if (!personnel)
             throw new common_1.NotFoundException("Personal no encontrado para este usuario");

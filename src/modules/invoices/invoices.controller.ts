@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Body, Param, Query, UseGuards } from "@nestjs/common"
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam, ApiQuery } from "@nestjs/swagger"
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam } from "@nestjs/swagger"
 import { InvoicesService } from "./invoices.service"
 import { InvoiceFilterDto, CancelInvoiceDto } from "./dto/invoices.dto"
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard"

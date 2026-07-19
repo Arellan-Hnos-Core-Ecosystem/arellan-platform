@@ -34,6 +34,15 @@ export class CompleteWorkOrderUseCase {
     })
     if (!order) throw new NotFoundException("Orden de trabajo no encontrada")
 
+    // SEC-23: un MECHANIC/TRAINEE sólo finaliza SU OT asignada (identidad del
+    // JWT; 404 para no revelar existencia — paridad con SEC-13/SEC-20).
+    if (
+      (params.userRole === "MECHANIC" || params.userRole === "TRAINEE") &&
+      order.mechanicId !== params.userId
+    ) {
+      throw new NotFoundException("Orden de trabajo no encontrada")
+    }
+
     if (order.status !== OrderStatus.IN_PROGRESS) {
       throw new ConflictException(
         `Solo se puede finalizar trabajo de OT en estado IN_PROGRESS. Estado actual: ${order.status}`,

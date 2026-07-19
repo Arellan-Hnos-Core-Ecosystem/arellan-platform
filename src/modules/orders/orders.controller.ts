@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, UseInterceptors, UploadedFile, Req, UploadedFiles } from "@nestjs/common"
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, UseInterceptors, UploadedFile, UploadedFiles } from "@nestjs/common"
 import { FileInterceptor, FilesInterceptor } from "@nestjs/platform-express"
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam, ApiConsumes, ApiBody } from "@nestjs/swagger"
 import { OrdersService } from "./orders.service"
@@ -7,10 +7,11 @@ import { ApproveQuoteUseCase } from "./use-cases/approve-quote.use-case"
 import { DispatchPartsToOrderUseCase } from "./use-cases/dispatch-parts-to-order.use-case"
 import { DeliverVehicleUseCase } from "./use-cases/deliver-vehicle.use-case"
 import { AuthUser } from "../auth/auth.service"
-import { CreateOrderDto, UpdateOrderDto, UpdateStatusDto, OrderFilterDto, ApplyDiscountDto, RequestPartsDto, MechanicProgressDto, VehicleCheckinDto, SendQuoteDto, ApproveQuoteDto, RejectQuoteDto, DeliverOrderDto, CompleteWorkOrderDto, RequestCameraCaptureDto } from "./dto/orders.dto"
+import { CreateOrderDto, UpdateOrderDto, UpdateStatusDto, OrderFilterDto, ApplyDiscountDto, RequestPartsDto, MechanicProgressDto, VehicleCheckinDto, SendQuoteDto, ApproveQuoteDto, RejectQuoteDto, DeliverOrderDto, CompleteWorkOrderDto, RequestCameraCaptureDto, AssignMechanicDto } from "./dto/orders.dto"
 import { CompleteWorkOrderUseCase } from "./use-cases/complete-work-order.use-case"
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard"
 import { RolesGuard } from "../../common/guards/roles.guard"
+import { MfaRequiredGuard } from "../../common/guards/mfa-required.guard"
 import { DataMaskingInterceptor } from "../../common/interceptors/data-masking.interceptor"
 import { Roles } from "../../common/decorators/roles.decorator"
 import { CurrentUser } from "../../common/decorators/current-user.decorator"
@@ -37,18 +38,21 @@ export class OrdersController {
 
   @Get()
   // SEC-20: listar TODAS las OT es sólo para gestión. Los mecánicos usan
-  // GET /orders/my (sus OT asignadas). Antes esta ruta sólo tenía JwtAuthGuard,
-  // permitiendo a MECHANIC/TRAINEE enumerar todas las órdenes del taller.
-  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.FINANCE)
+  // GET /orders/my (sus OT asignadas). FUN-18: una cuenta CLIENT recibe SOLO
+  // sus OT, filtradas server-side por el claim clientId del JWT.
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.FINANCE, UserRole.CLIENT)
   @UseGuards(RolesGuard)
   @ApiOperation({
-    summary: "Listar ordenes de trabajo (gestion)",
-    description: "Listado paginado de todas las OT con filtros por estado, mecanico, rango de fechas, cursor. Restringido a OWNER/ADMIN/FINANCE; los mecanicos usan GET /orders/my.",
+    summary: "Listar ordenes de trabajo (gestion / portal cliente)",
+    description: "Gestion (OWNER/ADMIN/FINANCE): listado completo con filtros. CLIENT: solo sus OT (filtrado por el clientId del JWT). Los mecanicos usan GET /orders/my.",
   })
   @ApiResponse({ status: 200, description: "Listado paginado de ordenes" })
   @ApiResponse({ status: 401, description: "JWT invalido o expirado" })
-  @ApiResponse({ status: 403, description: "Solo OWNER, ADMIN o FINANCE" })
-  findAll(@Query() filters: OrderFilterDto) {
+  @ApiResponse({ status: 403, description: "Rol sin acceso, o cuenta CLIENT sin cliente vinculado" })
+  findAll(@Query() filters: OrderFilterDto, @CurrentUser() user: AuthUser) {
+    if (user.role === UserRole.CLIENT) {
+      return this.ordersService.findAllForClient(user.clientId, filters)
+    }
     return this.ordersService.findAll(filters)
   }
 
@@ -97,8 +101,8 @@ export class OrdersController {
   @ApiResponse({ status: 404, description: "Orden no encontrada" })
   findOne(@Param("id") id: string, @CurrentUser() user: AuthUser) {
     // SEC-20: control de propiedad — MECHANIC/TRAINEE sólo su OT asignada,
-    // CLIENT sólo la suya; gestión ve todo (resuelto en el servicio).
-    return this.ordersService.findOne(id, { id: user.id, role: user.role })
+    // CLIENT sólo la suya (claim clientId, FUN-18); gestión ve todo.
+    return this.ordersService.findOne(id, { id: user.id, role: user.role, clientId: user.clientId })
   }
 
   @Post()
@@ -127,8 +131,9 @@ export class OrdersController {
   @ApiResponse({ status: 403, description: "Solo OWNER o ADMIN" })
   @ApiResponse({ status: 404, description: "OT no encontrada" })
   @ApiResponse({ status: 422, description: "No se puede modificar una OT cancelada" })
-  update(@Param("id") id: string, @Body() dto: UpdateOrderDto) {
-    return this.ordersService.update(id, dto)
+  update(@Param("id") id: string, @Body() dto: UpdateOrderDto, @CurrentUser() user: AuthUser) {
+    // SEC-23: scope de asignación para MECHANIC/TRAINEE (resuelto en servicio).
+    return this.ordersService.update(id, dto, { id: user.id, role: user.role })
   }
 
   @Post(":id/status")
@@ -145,7 +150,8 @@ export class OrdersController {
   @ApiResponse({ status: 403, description: "Solo MECHANIC o ADMIN; DELIVERED bloqueado si pago insuficiente" })
   @ApiResponse({ status: 404, description: "OT no encontrada" })
   updateStatus(@Param("id") id: string, @Body() dto: UpdateStatusDto, @CurrentUser() user: AuthUser) {
-    return this.ordersService.updateStatus(id, dto, user.id)
+    // SEC-23: scope de asignación para MECHANIC/TRAINEE (resuelto en servicio).
+    return this.ordersService.updateStatus(id, dto, { id: user.id, role: user.role })
   }
 
   @Delete(":id")
@@ -190,8 +196,14 @@ export class OrdersController {
   @ApiParam({ name: "id", description: "ID de la OT (UUID v4)" })
   @ApiResponse({ status: 201, description: "Foto subida y vinculada a la OT" })
   @ApiResponse({ status: 404, description: "OT no encontrada" })
-  async uploadPhoto(@Param("id") id: string, @UploadedFile() photo: Express.Multer.File, @Body("description") description?: string) {
-    return this.ordersService.uploadPhoto(id, photo, description)
+  async uploadPhoto(
+    @Param("id") id: string,
+    @UploadedFile() photo: Express.Multer.File,
+    @CurrentUser() user: AuthUser,
+    @Body("description") description?: string,
+  ) {
+    // SEC-23: scope de asignación para MECHANIC/TRAINEE (resuelto en servicio).
+    return this.ordersService.uploadPhoto(id, photo, { id: user.id, role: user.role }, description)
   }
 
   @Post(":id/parts")
@@ -207,10 +219,12 @@ export class OrdersController {
   @ApiResponse({ status: 404, description: "OT o item no encontrado" })
   @ApiResponse({ status: 409, description: "Stock insuficiente u OT finalizada" })
   async requestParts(@Param("id") id: string, @Body() dto: RequestPartsDto, @CurrentUser() user: AuthUser) {
+    // SEC-23: el use-case valida asignación para MECHANIC/TRAINEE.
     return this.dispatchPartsUseCase.execute(id, {
       items: dto.items,
       requestedBy: user.id,
       requestedByName: user.name,
+      requesterRole: user.role,
     })
   }
 
@@ -225,7 +239,8 @@ export class OrdersController {
   @ApiResponse({ status: 201, description: "Avance registrado en la bitacora" })
   @ApiResponse({ status: 404, description: "OT no encontrada" })
   async reportProgress(@Param("id") id: string, @Body() dto: MechanicProgressDto, @CurrentUser() user: AuthUser) {
-    return this.ordersService.reportProgress(id, dto, user.id, user.name)
+    // SEC-23: scope de asignación para MECHANIC/TRAINEE (resuelto en servicio).
+    return this.ordersService.reportProgress(id, dto, { id: user.id, role: user.role }, user.name)
   }
 
   @Post(":id/complete")
@@ -262,7 +277,8 @@ export class OrdersController {
   @ApiResponse({ status: 200, description: "Foto eliminada y evento registrado" })
   @ApiResponse({ status: 404, description: "OT o foto no encontrada" })
   async deletePhoto(@Param("id") id: string, @Param("photoId") photoId: string, @CurrentUser() user: AuthUser) {
-    return this.ordersService.deletePhoto(id, photoId, user.id, user.name)
+    // SEC-23: scope de asignación para MECHANIC/TRAINEE (resuelto en servicio).
+    return this.ordersService.deletePhoto(id, photoId, { id: user.id, role: user.role }, user.name)
   }
 
   @Post(":id/quote")
@@ -296,9 +312,12 @@ export class OrdersController {
   @ApiResponse({ status: 200, description: "Cotización aprobada, OT en IN_PROGRESS" })
   @ApiResponse({ status: 409, description: "Cotización no está en estado SENT" })
   approveQuote(@Param("id") id: string, @Body() dto: ApproveQuoteDto, @CurrentUser() user: AuthUser) {
+    // SEC-23/FUN-18: una cuenta CLIENT sólo aprueba la cotización de SU OT.
     return this.approveQuoteUseCase.execute(id, {
       clientSignature: dto.clientSignature,
       approverId: user.id,
+      approverRole: user.role,
+      approverClientId: user.clientId,
     })
   }
 
@@ -312,9 +331,12 @@ export class OrdersController {
   @ApiParam({ name: "id", description: "ID de la OT (UUID v4)" })
   @ApiResponse({ status: 200, description: "Cotización rechazada" })
   rejectQuote(@Param("id") id: string, @Body() dto: RejectQuoteDto, @CurrentUser() user: AuthUser) {
+    // SEC-23/FUN-18: una cuenta CLIENT sólo rechaza la cotización de SU OT.
     return this.approveQuoteUseCase.reject(id, {
       reason: dto.reason,
       rejectedBy: user.id,
+      rejectorRole: user.role,
+      rejectorClientId: user.clientId,
     })
   }
 
@@ -336,6 +358,23 @@ export class OrdersController {
       deliveredByName: user.name,
       paymentMethod: dto.paymentMethod as any,
     })
+  }
+
+  @Post(":id/assign")
+  @Roles(UserRole.ADMIN, UserRole.OWNER)
+  @UseGuards(RolesGuard, MfaRequiredGuard)
+  @ApiOperation({
+    summary: "Asignar/reasignar mecanico a una orden (FUN-17)",
+    description: "Asigna un mecanico (rol MECHANIC/TRAINEE con cuenta ACTIVA) a la OT. Solo ADMIN/OWNER con MFA. Cierra la deriva de contrato: frontend-web ya consumia POST /orders/:id/assign.",
+  })
+  @ApiParam({ name: "id", description: "ID de la OT (UUID v4)" })
+  @ApiResponse({ status: 201, description: "Mecanico asignado" })
+  @ApiResponse({ status: 400, description: "El destinatario no es un mecanico valido" })
+  @ApiResponse({ status: 403, description: "Solo ADMIN/OWNER con MFA" })
+  @ApiResponse({ status: 404, description: "OT no encontrada" })
+  @ApiResponse({ status: 409, description: "OT finalizada o cancelada" })
+  assignMechanicRoute(@Param("id") id: string, @Body() dto: AssignMechanicDto) {
+    return this.ordersService.assignMechanic(id, dto.mechanicId)
   }
 
   @Post("checkin")
@@ -379,7 +418,8 @@ export class OrdersController {
   @ApiResponse({ status: 400, description: "Posicion invalida" })
   @ApiResponse({ status: 401, description: "JWT invalido" })
   @ApiResponse({ status: 404, description: "OT no encontrada" })
-  async requestCameraCapture(@Param("id") id: string, @Body() dto: RequestCameraCaptureDto) {
-    return this.ordersService.requestCameraCapture(id, dto.position)
+  async requestCameraCapture(@Param("id") id: string, @Body() dto: RequestCameraCaptureDto, @CurrentUser() user: AuthUser) {
+    // SEC-23: scope de asignación para MECHANIC/TRAINEE (resuelto en servicio).
+    return this.ordersService.requestCameraCapture(id, dto.position, { id: user.id, role: user.role })
   }
 }

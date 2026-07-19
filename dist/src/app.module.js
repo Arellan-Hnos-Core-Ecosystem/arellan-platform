@@ -44,6 +44,7 @@ const analytics_module_1 = require("./modules/analytics/analytics.module");
 const audit_interceptor_1 = require("./common/interceptors/audit.interceptor");
 const data_masking_interceptor_1 = require("./common/interceptors/data-masking.interceptor");
 const anti_fraud_interceptor_1 = require("./common/anti-fraud/anti-fraud.interceptor");
+const mfa_enforcement_interceptor_1 = require("./common/interceptors/mfa-enforcement.interceptor");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -85,6 +86,7 @@ exports.AppModule = AppModule = __decorate([
         ],
         providers: [
             { provide: core_1.APP_GUARD, useClass: throttler_1.ThrottlerGuard },
+            { provide: core_1.APP_INTERCEPTOR, useClass: mfa_enforcement_interceptor_1.MfaEnforcementInterceptor },
             { provide: core_1.APP_INTERCEPTOR, useClass: anti_fraud_interceptor_1.AntiFraudInterceptor },
             { provide: core_1.APP_INTERCEPTOR, useClass: audit_interceptor_1.AuditInterceptor },
             { provide: core_1.APP_INTERCEPTOR, useClass: data_masking_interceptor_1.DataMaskingInterceptor },

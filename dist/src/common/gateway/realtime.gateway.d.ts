@@ -121,6 +121,7 @@ export declare class RealtimeGateway implements OnGatewayInit, OnGatewayConnecti
         userId?: string;
     }): void;
     private getSocketUser;
+    disconnectUser(accountId: string): void;
     private static parseId;
     private canAccessOrder;
     handleStatusChange(client: Socket, data: OrderUpdatePayload): Promise<{

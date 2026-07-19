@@ -71,7 +71,7 @@ let AuthController = class AuthController {
         return this.authService.register(dto);
     }
     generateMfa(user) {
-        return this.authService.generateMfaSecret(user.id);
+        return this.authService.generateMfaSecret(user);
     }
     confirmMfa(user, token) {
         return this.authService.confirmMfaSetup(user.id, token);
@@ -185,6 +185,7 @@ __decorate([
     }),
     (0, swagger_1.ApiResponse)({ status: 200, description: "Secreto MFA generado - retorna secret y otpauth URL" }),
     (0, swagger_1.ApiResponse)({ status: 401, description: "JWT invalido o expirado" }),
+    (0, swagger_1.ApiResponse)({ status: 403, description: "Regenerar MFA activa exige sesion con TOTP verificado (SEC-25)" }),
     __param(0, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),

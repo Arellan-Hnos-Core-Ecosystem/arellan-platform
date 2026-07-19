@@ -13,6 +13,7 @@ export declare class DispatchPartsToOrderUseCase {
         }>;
         requestedBy: string;
         requestedByName: string;
+        requesterRole: string;
     }): Promise<{
         success: boolean;
         parts: {

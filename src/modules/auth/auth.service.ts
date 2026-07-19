@@ -3,6 +3,8 @@ import { JwtService } from "@nestjs/jwt"
 import { ConfigService } from "@nestjs/config"
 import { PrismaService } from "../../common/prisma/prisma.service"
 import { RedisService } from "../../common/redis/redis.service"
+import { SecretCipherService } from "../../common/crypto/secret-cipher.service"
+import { RealtimeGateway } from "../../common/gateway/realtime.gateway"
 import * as bcrypt from "bcryptjs"
 import { createHash } from "crypto"
 import { authenticator } from "otplib"
@@ -15,7 +17,15 @@ export interface AuthUser {
   role: UserRole
   name: string
   mfaVerified: boolean
+  // FUN-18: para cuentas CLIENT, id del registro Client enlazado
+  // (Client.accountId). La autorización de recursos del portal compara SIEMPRE
+  // contra este claim del JWT, nunca contra IDs enviados por el frontend.
+  clientId?: string | null
 }
+
+const PRIVILEGED_ROLES: UserRole[] = [UserRole.OWNER, UserRole.ADMIN, UserRole.FINANCE]
+const MFA_PENDING_PREFIX = "mfa:pending:"
+const MFA_PENDING_TTL_SECONDS = 600
 
 @Injectable()
 export class AuthService {
@@ -26,7 +36,16 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly redis: RedisService,
+    private readonly secretCipher: SecretCipherService,
+    private readonly realtimeGateway: RealtimeGateway,
   ) {}
+
+  // SEC-06: los refresh tokens se persisten como hash SHA-256 (no en claro).
+  // Una copia de la BD no permite reutilizar un refresh token: el valor en
+  // claro sólo existe en el cliente; la búsqueda/revocación compara por hash.
+  private static hashToken(token: string): string {
+    return createHash("sha256").update(token).digest("hex")
+  }
 
   async login(dto: LoginDto, ip: string, userAgent?: string) {
     const account = await this.prisma.account.findUnique({
@@ -77,7 +96,18 @@ export class AuthService {
       }
     }
 
-    return this.generateTokens(account, false, ip, userAgent)
+    // SEC-05-bis: los roles privilegiados sin MFA enrolada reciben tokens con
+    // mfaVerified=false — el MfaEnforcementInterceptor global les bloquea todo
+    // salvo /auth/* hasta completar el enrolamiento (mfa/generate + mfa/confirm).
+    const result = await this.generateTokens(account, false, ip, userAgent)
+    if (PRIVILEGED_ROLES.includes(account.role) && !account.mfaEnabled) {
+      return {
+        ...result,
+        mfaEnrollmentRequired: true,
+        message: "Tu rol requiere MFA. Configura tu autenticador antes de operar.",
+      }
+    }
+    return result
   }
 
   async mechanicLogin(pin: string, ip: string, userAgent?: string) {
@@ -133,9 +163,11 @@ export class AuthService {
       throw new UnauthorizedException("MFA no configurada")
     }
 
+    // SEC-06: el secreto TOTP se guarda cifrado (AES-256-GCM); se descifra
+    // sólo en memoria para la verificación.
     const isValid = authenticator.verify({
       token: dto.token,
-      secret: account.mfaSecret,
+      secret: this.secretCipher.decrypt(account.mfaSecret),
     })
 
     if (!isValid) {
@@ -146,11 +178,25 @@ export class AuthService {
     return this.generateTokens(account, true)
   }
 
-  async generateMfaSecret(userId: string) {
-    const account = await this.prisma.account.findUnique({ where: { id: userId } })
+  // SEC-25: antes, este método sobrescribía `mfaSecret` y ponía
+  // `mfaEnabled=false` con cualquier access token válido — un token robado (aun
+  // con mfaVerified=false) permitía DESACTIVAR el MFA de la víctima sin
+  // verificar ningún factor. Ahora: (a) si la cuenta ya tiene MFA activa, la
+  // regeneración exige un token con mfaVerified=true (sesión que completó
+  // TOTP); (b) el secreto nuevo queda PENDIENTE en Redis (cifrado, TTL 10 min)
+  // y el secreto/estado actual NO se toca hasta confirmar con un código válido.
+  async generateMfaSecret(user: Pick<AuthUser, "id" | "mfaVerified">) {
+    const account = await this.prisma.account.findUnique({ where: { id: user.id } })
 
     if (!account) {
       throw new NotFoundException("Usuario no encontrado")
+    }
+
+    if (account.mfaEnabled && user.mfaVerified !== true) {
+      throw new ForbiddenException({
+        message: "Para regenerar el MFA debes iniciar sesion completando tu TOTP actual",
+        code: "MFA_REQUIRED",
+      })
     }
 
     const secret = authenticator.generateSecret()
@@ -160,9 +206,23 @@ export class AuthService {
       secret,
     )
 
-    await this.prisma.account.update({
-      where: { id: userId },
-      data: { mfaSecret: secret, mfaEnabled: false },
+    await this.redis.set(
+      `${MFA_PENDING_PREFIX}${account.id}`,
+      this.secretCipher.encrypt(secret),
+      MFA_PENDING_TTL_SECONDS,
+    )
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: account.id,
+        userName: account.name,
+        role: account.role,
+        action: "MFA_ENROLL_STARTED",
+        entity: "Account",
+        entityId: account.id,
+        severity: "INFO",
+        ipAddress: "system",
+      },
     })
 
     return { secret, otpauth }
@@ -170,26 +230,43 @@ export class AuthService {
 
   async confirmMfaSetup(userId: string, token: string) {
     const account = await this.prisma.account.findUnique({ where: { id: userId } })
+    if (!account) throw new NotFoundException("Usuario no encontrado")
 
-    if (!account || !account.mfaSecret) {
-      throw new NotFoundException("MFA no configurada")
+    const pendingEncrypted = await this.redis.get(`${MFA_PENDING_PREFIX}${userId}`)
+    if (!pendingEncrypted) {
+      throw new NotFoundException("No hay un enrolamiento MFA pendiente. Genera un secreto primero.")
     }
 
-    const isValid = authenticator.verify({
-      token,
-      secret: account.mfaSecret,
-    })
-
+    const pendingSecret = this.secretCipher.decrypt(pendingEncrypted)
+    const isValid = authenticator.verify({ token, secret: pendingSecret })
     if (!isValid) {
       throw new UnauthorizedException("Codigo MFA invalido")
     }
 
     await this.prisma.account.update({
       where: { id: userId },
-      data: { mfaEnabled: true },
+      data: { mfaSecret: this.secretCipher.encrypt(pendingSecret), mfaEnabled: true },
+    })
+    await this.redis.del(`${MFA_PENDING_PREFIX}${userId}`)
+
+    // SEC-05-bis: al cambiar el estado MFA se revocan las sesiones previas —
+    // fueron emitidas sin (o con otro) segundo factor.
+    await this.revokeAllUserSessions(userId)
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId,
+        userName: account.name,
+        role: account.role,
+        action: "MFA_ENABLED",
+        entity: "Account",
+        entityId: userId,
+        severity: "WARNING",
+        ipAddress: "system",
+      },
     })
 
-    return { message: "MFA activada correctamente" }
+    return { message: "MFA activada correctamente. Vuelve a iniciar sesion con tu codigo TOTP." }
   }
 
   async register(dto: RegisterDto) {
@@ -234,11 +311,7 @@ export class AuthService {
     // SEC-19: invalidar TODAS las sesiones tras cambiar la contraseña (CWE-613).
     // Antes, los refresh tokens y sesiones Redis previas seguían vigentes: un
     // atacante con una sesión robada conservaba acceso pese al cambio de clave.
-    await this.prisma.refreshToken.updateMany({
-      where: { accountId: userId, revoked: false },
-      data: { revoked: true },
-    })
-    await this.invalidateAllSessions(userId)
+    await this.revokeAllUserSessions(userId)
 
     await this.prisma.auditLog.create({
       data: {
@@ -266,12 +339,37 @@ export class AuthService {
       throw new UnauthorizedException("Refresh token invalido o expirado")
     }
 
+    const tokenHash = AuthService.hashToken(refreshToken)
     const stored = await this.prisma.refreshToken.findUnique({
-      where: { token: refreshToken },
+      where: { token: tokenHash },
       include: { account: true },
     })
 
-    if (!stored || stored.revoked || new Date() > stored.expiresAt) {
+    if (!stored) {
+      throw new UnauthorizedException("Refresh token revocado")
+    }
+
+    // SEC-06: detección de reutilización. Un refresh token ya rotado que vuelve
+    // a presentarse indica robo/replay de la familia de tokens → se revocan
+    // TODAS las sesiones del usuario y se registra alerta de seguridad.
+    if (stored.revoked) {
+      await this.revokeAllUserSessions(stored.accountId)
+      await this.prisma.auditLog.create({
+        data: {
+          userId: stored.accountId,
+          userName: stored.account.name,
+          role: stored.account.role,
+          action: "REFRESH_TOKEN_REUSE_DETECTED",
+          entity: "RefreshToken",
+          entityId: stored.id,
+          severity: "SECURITY_ALERT",
+          ipAddress: stored.ipAddress ?? "unknown",
+        },
+      })
+      throw new UnauthorizedException("Refresh token revocado")
+    }
+
+    if (new Date() > stored.expiresAt) {
       throw new UnauthorizedException("Refresh token revocado")
     }
 
@@ -280,32 +378,33 @@ export class AuthService {
       data: { revoked: true },
     })
 
-    return this.generateTokens(stored.account, false, stored.ipAddress || undefined, stored.deviceInfo || undefined)
+    // FUN-19: el refresh conserva el estado MFA de la sesión original (claim
+    // firmado en el refresh JWT). Antes se re-emitía con mfaVerified=false,
+    // degradando a los privilegiados que SÍ completaron TOTP: tras 15 min todas
+    // las rutas MFA-protegidas les devolvían 403.
+    const mfaVerified = payload.mfaVerified === true
+    return this.generateTokens(stored.account, mfaVerified, stored.ipAddress || undefined, stored.deviceInfo || undefined)
   }
 
   async logout(refreshToken: string) {
+    const tokenHash = AuthService.hashToken(refreshToken)
     const stored = await this.prisma.refreshToken.findUnique({
-      where: { token: refreshToken },
+      where: { token: tokenHash },
     })
 
     if (stored) {
-      await this.invalidateSession(stored.accountId, refreshToken)
+      await this.invalidateSession(stored.accountId, stored.token)
     }
 
     await this.prisma.refreshToken.updateMany({
-      where: { token: refreshToken },
+      where: { token: tokenHash },
       data: { revoked: true },
     })
     return { message: "Sesion cerrada correctamente" }
   }
 
   async forceLogoutUser(targetUserId: string, performerId: string) {
-    await this.prisma.refreshToken.updateMany({
-      where: { accountId: targetUserId, revoked: false },
-      data: { revoked: true },
-    })
-
-    await this.invalidateAllSessions(targetUserId)
+    await this.revokeAllUserSessions(targetUserId)
 
     this.logger.log(`Force logout of user ${targetUserId} by ${performerId}`)
     return { message: "Sesion cerrada forzosamente" }
@@ -320,13 +419,12 @@ export class AuthService {
     return account
   }
 
-  async storeSession(accountId: string, token: string) {
-    const tokenHash = createHash("sha256").update(token).digest("hex")
-    await this.redis.set(`session:${accountId}:${token}`, tokenHash, 604800)
+  async storeSession(accountId: string, tokenHash: string) {
+    await this.redis.set(`session:${accountId}:${tokenHash}`, tokenHash, 604800)
   }
 
-  async invalidateSession(accountId: string, token: string) {
-    await this.redis.del(`session:${accountId}:${token}`)
+  async invalidateSession(accountId: string, tokenHash: string) {
+    await this.redis.del(`session:${accountId}:${tokenHash}`)
   }
 
   async invalidateAllSessions(accountId: string) {
@@ -334,6 +432,18 @@ export class AuthService {
     if (keys.length > 0) {
       await this.redis.client.del(...keys)
     }
+  }
+
+  // Revocación integral de un usuario: refresh tokens (BD) + sesiones Redis +
+  // sockets WebSocket vivos (SEC-24: un socket conectado sobrevivía a la
+  // revocación de la sesión que lo autenticó).
+  private async revokeAllUserSessions(accountId: string) {
+    await this.prisma.refreshToken.updateMany({
+      where: { accountId, revoked: false },
+      data: { revoked: true },
+    })
+    await this.invalidateAllSessions(accountId)
+    this.realtimeGateway.disconnectUser(accountId)
   }
 
   async getActiveSessions(accountId: string): Promise<string[]> {
@@ -347,12 +457,7 @@ export class AuthService {
     const account = await this.prisma.account.findUnique({ where: { id: accountId } })
     if (!account) throw new NotFoundException("Usuario no encontrado")
 
-    await this.invalidateAllSessions(accountId)
-
-    await this.prisma.refreshToken.updateMany({
-      where: { accountId, revoked: false },
-      data: { revoked: true },
-    })
+    await this.revokeAllUserSessions(accountId)
 
     await this.prisma.auditLog.create({
       data: {
@@ -370,11 +475,12 @@ export class AuthService {
   }
 
   async getSessions(userId: string) {
+    // SEC-06: no se devuelve la columna token (ahora hash del refresh token);
+    // la revocación individual usa el id de la sesión.
     return this.prisma.refreshToken.findMany({
       where: { accountId: userId, revoked: false },
       select: {
         id: true,
-        token: true,
         expiresAt: true,
         deviceInfo: true,
         ipAddress: true,
@@ -409,34 +515,61 @@ export class AuthService {
     return account
   }
 
+  // Verificación TOTP reutilizable (login MFA, override de caja). Descifra el
+  // secreto en memoria; nunca lo expone.
+  async verifyTotpForAccount(accountId: string, token: string): Promise<boolean> {
+    const account = await this.prisma.account.findUnique({
+      where: { id: accountId },
+      select: { mfaEnabled: true, mfaSecret: true },
+    })
+    if (!account?.mfaEnabled || !account.mfaSecret) return false
+    return authenticator.verify({ token, secret: this.secretCipher.decrypt(account.mfaSecret) })
+  }
+
   private async generateTokens(account: Account, mfaVerified = false, ip?: string, userAgent?: string) {
     // SEC-05: MFA es obligatorio para OWNER/ADMIN/FINANCE. Antes, mfaVerified
     // era true cuando la cuenta NO tenía MFA activada (`!account.mfaEnabled`),
     // lo que permitía a un privilegiado sin MFA pasar el MfaRequiredGuard. Ahora
     // los roles privilegiados sólo quedan verificados si completaron el TOTP;
     // los no privilegiados (MECHANIC/TRAINEE/CLIENT) no usan MFA.
-    const requiresMfa = ["OWNER", "ADMIN", "FINANCE"].includes(account.role)
+    const requiresMfa = PRIVILEGED_ROLES.includes(account.role)
+    const effectiveMfaVerified = mfaVerified || !requiresMfa
+
+    // FUN-18: identidad CLIENT resuelta server-side (relación Client.accountId).
+    let clientId: string | null = null
+    if (account.role === UserRole.CLIENT) {
+      const client = await this.prisma.client.findUnique({
+        where: { accountId: account.id },
+        select: { id: true },
+      })
+      clientId = client?.id ?? null
+    }
+
     const payload: AuthUser = {
       id: account.id,
       email: account.email,
       role: account.role,
       name: account.name,
-      mfaVerified: mfaVerified || !requiresMfa,
+      mfaVerified: effectiveMfaVerified,
+      ...(account.role === UserRole.CLIENT ? { clientId } : {}),
     }
 
-    const accessToken = this.jwt.sign(payload, {
+    const accessToken = this.jwt.sign(payload as unknown as Record<string, unknown>, {
       secret: this.config.get("JWT_ACCESS_SECRET"),
       expiresIn: this.config.get("JWT_ACCESS_TTL", "15m"),
     })
 
+    // FUN-19: el refresh JWT lleva el estado MFA firmado para que la rotación
+    // no degrade sesiones que completaron TOTP.
     const refreshToken = this.jwt.sign(
-      { sub: account.id },
+      { sub: account.id, mfaVerified: effectiveMfaVerified },
       { secret: this.config.get("JWT_REFRESH_SECRET"), expiresIn: this.config.get("JWT_REFRESH_TTL", "7d") }
     )
 
+    const tokenHash = AuthService.hashToken(refreshToken)
     await this.prisma.refreshToken.create({
       data: {
-        token: refreshToken,
+        token: tokenHash,
         accountId: account.id,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         ipAddress: ip,
@@ -444,7 +577,7 @@ export class AuthService {
       },
     })
 
-    await this.storeSession(account.id, refreshToken)
+    await this.storeSession(account.id, tokenHash)
 
     this.logger.log(`Session created for ${account.email}`)
 

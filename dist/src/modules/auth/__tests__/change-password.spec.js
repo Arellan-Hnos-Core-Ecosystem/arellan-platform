@@ -19,8 +19,10 @@ function buildService(accountOverride = {}) {
         auditLog: { create: jest.fn().mockResolvedValue({}) },
     };
     const redis = { client: { scan: jest.fn().mockResolvedValue(["0", []]), del: jest.fn() } };
-    const service = new auth_service_1.AuthService(prisma, {}, {}, redis);
-    return { service, prisma };
+    const cipher = { encrypt: jest.fn((v) => `v1:enc:${v}`), decrypt: jest.fn((v) => v) };
+    const gateway = { disconnectUser: jest.fn() };
+    const service = new auth_service_1.AuthService(prisma, {}, {}, redis, cipher, gateway);
+    return { service, prisma, gateway };
 }
 describe("AuthService.changePassword (SEC-19 / SEC-15)", () => {
     it("rejects when the current password is wrong", async () => {
@@ -33,11 +35,12 @@ describe("AuthService.changePassword (SEC-19 / SEC-15)", () => {
         await expect(service.changePassword(USER_ID, { currentPassword: CURRENT, newPassword: CURRENT })).rejects.toThrow(common_1.UnauthorizedException);
         expect(prisma.account.update).not.toHaveBeenCalled();
     });
-    it("revokes all refresh tokens and audits on a successful change (SEC-19)", async () => {
-        const { service, prisma } = buildService();
+    it("revokes all refresh tokens, disconnects sockets and audits on a successful change (SEC-19/SEC-24)", async () => {
+        const { service, prisma, gateway } = buildService();
         await service.changePassword(USER_ID, { currentPassword: CURRENT, newPassword: "BrandNew1!" });
         expect(prisma.account.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: USER_ID }, data: expect.objectContaining({ passwordHash: expect.any(String) }) }));
         expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { accountId: USER_ID, revoked: false }, data: { revoked: true } }));
+        expect(gateway.disconnectUser).toHaveBeenCalledWith(USER_ID);
         expect(prisma.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ action: "PASSWORD_CHANGED" }) }));
     });
 });

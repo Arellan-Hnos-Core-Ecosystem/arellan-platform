@@ -35,10 +35,11 @@ describe("OrdersService.findOne authorization (SEC-20 / BOLA)", () => {
         const { service } = buildService(ORDER);
         await expect(service.findOne(ORDER_ID, { id: "trainee-x", role: "TRAINEE" })).rejects.toThrow(common_1.NotFoundException);
     });
-    it("lets the owning client read their own order but blocks others", async () => {
+    it("lets the owning client read their own order but blocks others (clientId claim, FUN-18)", async () => {
         const { service } = buildService(ORDER);
-        await expect(service.findOne(ORDER_ID, { id: OWNING_CLIENT, role: "CLIENT" })).resolves.toMatchObject({ id: ORDER_ID });
-        await expect(service.findOne(ORDER_ID, { id: "client-2", role: "CLIENT" })).rejects.toThrow(common_1.NotFoundException);
+        await expect(service.findOne(ORDER_ID, { id: "acc-roberto", role: "CLIENT", clientId: OWNING_CLIENT })).resolves.toMatchObject({ id: ORDER_ID });
+        await expect(service.findOne(ORDER_ID, { id: "acc-x", role: "CLIENT", clientId: "client-2" })).rejects.toThrow(common_1.NotFoundException);
+        await expect(service.findOne(ORDER_ID, { id: OWNING_CLIENT, role: "CLIENT" })).rejects.toThrow(common_1.NotFoundException);
     });
     it("keeps internal callers (no requester) unrestricted", async () => {
         const { service } = buildService(ORDER);

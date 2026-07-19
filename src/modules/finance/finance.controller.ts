@@ -2,7 +2,7 @@ import { Controller, Post, Get, Body, Param, Query, UseGuards, BadRequestExcepti
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam, ApiQuery } from "@nestjs/swagger"
 import { FinanceService } from "./finance.service"
 import { CloseCashboxSessionUseCase } from "./use-cases/close-cashbox-session.use-case"
-import { AuthUser } from "../auth/auth.service"
+import { AuthService, AuthUser } from "../auth/auth.service"
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard"
 import { RolesGuard } from "../../common/guards/roles.guard"
 import { MfaRequiredGuard } from "../../common/guards/mfa-required.guard"
@@ -17,6 +17,7 @@ export class FinanceController {
   constructor(
     private readonly financeService: FinanceService,
     private readonly closeCashboxSessionUseCase: CloseCashboxSessionUseCase,
+    private readonly authService: AuthService,
   ) {}
 
   @Post("cashbox/open")
@@ -187,21 +188,14 @@ export class FinanceController {
   @ApiResponse({ status: 400, description: "Código TOTP inválido o sesión no está BLOCKED" })
   @ApiResponse({ status: 403, description: "Solo OWNER" })
   async overrideCashbox(@CurrentUser() user: AuthUser, @Body() dto: CashboxOverrideDto) {
-    const { authenticator } = await import("otplib")
-
-    const owner = await this.financeService["prisma"].account.findUnique({
-      where: { id: user.id },
-      select: { mfaSecret: true, mfaEnabled: true },
-    })
-
-    if (!owner?.mfaEnabled || !owner?.mfaSecret) {
-      // SEC-07: excepciones HTTP tipadas (antes `throw new Error` → 500).
-      throw new BadRequestException("El OWNER no tiene MFA configurado. Configure Google Authenticator primero.")
-    }
-
-    const isValid = authenticator.verify({ token: dto.totpCode, secret: owner.mfaSecret })
+    // SEC-06: el secreto MFA está cifrado en reposo; la verificación TOTP se
+    // delega a AuthService (descifra sólo en memoria). SEC-07: excepciones
+    // HTTP tipadas (antes `throw new Error` → 500).
+    const isValid = await this.authService.verifyTotpForAccount(user.id, dto.totpCode)
     if (!isValid) {
-      throw new BadRequestException("Código TOTP inválido o expirado.")
+      throw new BadRequestException(
+        "Código TOTP inválido, expirado o MFA no configurada para este OWNER.",
+      )
     }
 
     const session = await this.financeService["prisma"].cashboxSession.findUnique({

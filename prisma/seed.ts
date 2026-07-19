@@ -148,6 +148,19 @@ async function main() {
     update: { type: "INDIVIDUAL", firstName: "Roberto", lastName: "Gonzales", phone: "956781234", address: "Av. Angamos 1234", district: "Surquillo", source: "Referido", isVip: true, creditLimit: 2000 },
     create: { type: "INDIVIDUAL", firstName: "Roberto", lastName: "Gonzales", dni: "19283746", phone: "956781234", address: "Av. Angamos 1234", district: "Surquillo", source: "Referido", isVip: true, creditLimit: 2000 },
   })
+  // FUN-18: cuenta de portal CLIENT enlazada al cliente c1 (Client.accountId).
+  // La identidad del portal se resuelve por esta relación (claim clientId en el
+  // JWT); Roberto solo verá SUS órdenes.
+  const clAccount = await prisma.account.upsert({
+    where: { email: "cliente@arellanautos.pe" },
+    update: { passwordHash: hash, role: "CLIENT", name: "Roberto Gonzales" },
+    create: { email: "cliente@arellanautos.pe", passwordHash: hash, role: "CLIENT", name: "Roberto Gonzales" },
+  })
+  await prisma.client.update({
+    where: { id: c1.id },
+    data: { accountId: clAccount.id },
+  })
+
   const c2 = await prisma.client.upsert({
     where: { dni: "29384756" },
     update: { type: "INDIVIDUAL", firstName: "María", lastName: "Fernández", phone: "967892345", address: "Calle Schell 567", district: "Miraflores", source: "Google" },

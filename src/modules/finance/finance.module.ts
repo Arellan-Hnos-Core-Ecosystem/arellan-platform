@@ -6,9 +6,12 @@ import { FinanceService } from "./finance.service"
 import { CloseCashboxSessionUseCase } from "./use-cases/close-cashbox-session.use-case"
 import { CacheManagerService } from "../../common/cache/cache-manager.service"
 import { RealtimeModule } from "../../common/gateway/realtime.module"
+import { AuthModule } from "../auth/auth.module"
 
 @Module({
-  imports: [RealtimeModule],
+  // AuthModule: el override de caja verifica el TOTP del OWNER vía
+  // AuthService.verifyTotpForAccount (secreto MFA cifrado — SEC-06).
+  imports: [RealtimeModule, AuthModule],
   controllers: [FinanceController, AlertsController, PaymentWebhookController],
   providers: [
     FinanceService,

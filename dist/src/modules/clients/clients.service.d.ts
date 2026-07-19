@@ -11,6 +11,7 @@ export declare class ClientsService {
             createdAt: Date;
             updatedAt: Date;
             deletedAt: Date | null;
+            accountId: string | null;
             dni: string | null;
             firstName: string;
             lastName: string | null;
@@ -58,6 +59,7 @@ export declare class ClientsService {
         createdAt: Date;
         updatedAt: Date;
         deletedAt: Date | null;
+        accountId: string | null;
         dni: string | null;
         firstName: string;
         lastName: string | null;
@@ -81,6 +83,7 @@ export declare class ClientsService {
         createdAt: Date;
         updatedAt: Date;
         deletedAt: Date | null;
+        accountId: string | null;
         dni: string | null;
         firstName: string;
         lastName: string | null;
@@ -104,6 +107,7 @@ export declare class ClientsService {
         createdAt: Date;
         updatedAt: Date;
         deletedAt: Date | null;
+        accountId: string | null;
         dni: string | null;
         firstName: string;
         lastName: string | null;

@@ -1,5 +1,5 @@
 import {
-  IsNumber, IsInt, IsString, IsEnum, IsOptional, IsUrl, IsIn, Min, Max, MinLength, MaxLength, ValidateIf, IsPositive, IsNotEmpty,
+  IsNumber, IsInt, IsString, IsEnum, IsOptional, IsUrl, IsIn, Min, Max, MinLength, MaxLength, ValidateIf, IsPositive,
 } from "class-validator"
 import { Type } from "class-transformer"
 import { TransactionType, PaymentMethod, ExpenseCategory, Currency } from "@prisma/client"

@@ -127,7 +127,7 @@ let InvoicesService = InvoicesService_1 = class InvoicesService {
         this.logger.log(`Factura creada: ${number} desde OT ${workOrder.number}`);
         return invoice;
     }
-    async issue(id, userId) {
+    async issue(id, _userId) {
         const invoice = await this.prisma.invoice.findUnique({ where: { id } });
         if (!invoice) {
             throw new common_1.NotFoundException("Factura no encontrada");

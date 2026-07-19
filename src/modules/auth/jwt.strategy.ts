@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common"
+import { Injectable, UnauthorizedException } from "@nestjs/common"
 import { PassportStrategy } from "@nestjs/passport"
 import { ExtractJwt, Strategy } from "passport-jwt"
 import { ConfigService } from "@nestjs/config"
@@ -16,13 +16,21 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     })
   }
 
-  validate(payload: AuthUser): AuthUser {
+  validate(payload: AuthUser & { mfaPending?: boolean }): AuthUser {
+    // SEC-05-bis: el sessionToken intermedio de MFA ({sub, mfaPending}) está
+    // firmado con el mismo secreto; sin este rechazo podía presentarse como
+    // access token en rutas API (con id undefined). Sólo se aceptan access
+    // tokens completos.
+    if (!payload.id || payload.mfaPending === true) {
+      throw new UnauthorizedException("Token de acceso invalido")
+    }
     return {
       id: payload.id,
       email: payload.email,
       role: payload.role,
       name: payload.name,
       mfaVerified: payload.mfaVerified,
+      clientId: payload.clientId ?? null,
     }
   }
 }

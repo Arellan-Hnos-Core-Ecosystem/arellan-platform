@@ -1,9 +1,14 @@
 import { ConfigService } from "@nestjs/config";
 import { PrismaService } from "../../common/prisma/prisma.service";
 import { Prisma, UserRole } from "@prisma/client";
-import { CreateOrderDto, UpdateOrderDto, UpdateStatusDto, OrderFilterDto, PaginatedResult, ApplyDiscountDto, RequestPartsDto, MechanicProgressDto, VehicleCheckinDto, CameraCaptureDto } from "./dto/orders.dto";
+import { CreateOrderDto, UpdateOrderDto, UpdateStatusDto, OrderFilterDto, PaginatedResult, ApplyDiscountDto, MechanicProgressDto, VehicleCheckinDto, CameraCaptureDto } from "./dto/orders.dto";
 import { RealtimeGateway } from "../../common/gateway/realtime.gateway";
 import { IotBridgeClient } from "../../common/iot-bridge/iot-bridge.client";
+export interface OrderRequester {
+    id: string;
+    role: string;
+    clientId?: string | null;
+}
 export declare class OrdersService {
     private readonly prisma;
     private readonly wsGateway;
@@ -11,6 +16,7 @@ export declare class OrdersService {
     private readonly iotBridge;
     private readonly logger;
     constructor(prisma: PrismaService, wsGateway: RealtimeGateway, config: ConfigService, iotBridge: IotBridgeClient);
+    private static assertMutationScope;
     create(dto: CreateOrderDto, userId: string): Promise<{
         client: {
             id: string;
@@ -18,6 +24,7 @@ export declare class OrdersService {
             createdAt: Date;
             updatedAt: Date;
             deletedAt: Date | null;
+            accountId: string | null;
             dni: string | null;
             firstName: string;
             lastName: string | null;
@@ -101,16 +108,15 @@ export declare class OrdersService {
         updatedBy: string | null;
     }>;
     findAll(filters: OrderFilterDto): Promise<PaginatedResult<unknown>>;
-    findOne(id: string, requester?: {
-        id: string;
-        role: string;
-    }): Promise<{
+    findAllForClient(clientId: string | null | undefined, filters: OrderFilterDto): Promise<PaginatedResult<unknown>>;
+    findOne(id: string, requester?: OrderRequester): Promise<{
         client: {
             id: string;
             email: string | null;
             createdAt: Date;
             updatedAt: Date;
             deletedAt: Date | null;
+            accountId: string | null;
             dni: string | null;
             firstName: string;
             lastName: string | null;
@@ -267,13 +273,14 @@ export declare class OrdersService {
         createdBy: string;
         updatedBy: string | null;
     }>;
-    update(id: string, dto: UpdateOrderDto): Promise<{
+    update(id: string, dto: UpdateOrderDto, requester: OrderRequester): Promise<{
         client: {
             id: string;
             email: string | null;
             createdAt: Date;
             updatedAt: Date;
             deletedAt: Date | null;
+            accountId: string | null;
             dni: string | null;
             firstName: string;
             lastName: string | null;
@@ -356,13 +363,14 @@ export declare class OrdersService {
         createdBy: string;
         updatedBy: string | null;
     }>;
-    updateStatus(id: string, dto: UpdateStatusDto, userId: string): Promise<{
+    updateStatus(id: string, dto: UpdateStatusDto, requester: OrderRequester): Promise<{
         client: {
             id: string;
             email: string | null;
             createdAt: Date;
             updatedAt: Date;
             deletedAt: Date | null;
+            accountId: string | null;
             dni: string | null;
             firstName: string;
             lastName: string | null;
@@ -453,6 +461,7 @@ export declare class OrdersService {
             createdAt: Date;
             updatedAt: Date;
             deletedAt: Date | null;
+            accountId: string | null;
             dni: string | null;
             firstName: string;
             lastName: string | null;
@@ -542,6 +551,7 @@ export declare class OrdersService {
             createdAt: Date;
             updatedAt: Date;
             deletedAt: Date | null;
+            accountId: string | null;
             dni: string | null;
             firstName: string;
             lastName: string | null;
@@ -635,18 +645,6 @@ export declare class OrdersService {
         todayRevenue: number;
         lowStockCount: number;
     }>;
-    addItem(orderId: string, dto: {
-        itemId: string;
-        quantity: number;
-        unitPrice: number;
-    }, userId: string): Promise<{
-        id: string;
-        createdAt: Date;
-        unitPrice: Prisma.Decimal;
-        orderId: string;
-        itemId: string;
-        quantity: number;
-    }>;
     applyDiscount(orderId: string, dto: ApplyDiscountDto, userId: string, userRole: UserRole): Promise<{
         number: string;
         id: string;
@@ -690,15 +688,11 @@ export declare class OrdersService {
         message: string;
         approvalId: string;
     }>;
-    uploadPhoto(orderId: string, photo: Express.Multer.File, description?: string): Promise<{
+    uploadPhoto(orderId: string, photo: Express.Multer.File, requester: OrderRequester, description?: string): Promise<{
         success: boolean;
         url: string;
     }>;
-    requestParts(orderId: string, dto: RequestPartsDto, userId: string, userName: string): Promise<{
-        success: boolean;
-        parts: unknown[];
-    }>;
-    reportProgress(orderId: string, dto: MechanicProgressDto, userId: string, userName: string): Promise<{
+    reportProgress(orderId: string, dto: MechanicProgressDto, requester: OrderRequester, userName: string): Promise<{
         success: boolean;
         event: {
             id: string;
@@ -710,7 +704,7 @@ export declare class OrdersService {
             workOrderId: string;
         };
     }>;
-    deletePhoto(orderId: string, photoId: string, userId: string, userName: string): Promise<{
+    deletePhoto(orderId: string, photoId: string, requester: OrderRequester, userName: string): Promise<{
         success: boolean;
     }>;
     vehicleCheckin(body: VehicleCheckinDto, photos: Express.Multer.File[], userId: string, userName: string): Promise<{
@@ -725,5 +719,5 @@ export declare class OrdersService {
         hash: string;
         photoCount: number;
     }>;
-    requestCameraCapture(orderId: string, position: string): Promise<any>;
+    requestCameraCapture(orderId: string, position: string, requester: OrderRequester): Promise<any>;
 }

@@ -100,7 +100,7 @@ export class CloseCashboxSessionUseCase {
       })
     }
 
-    const closed = await this.prisma.cashboxSession.update({
+    const _closed = await this.prisma.cashboxSession.update({
       where: { id: session.id },
       data: {
         status: newStatus as any,

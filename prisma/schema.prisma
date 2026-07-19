@@ -279,6 +279,7 @@ model Account {
   approvals        Approval[]           @relation("ApprovedBy")
   approvalRequests Approval[]           @relation("RequestedBy")
   personnelProfile Personnel?
+  clientProfile    Client?
 
   @@index([email])
   @@index([role])
@@ -411,6 +412,13 @@ model VehicleUsage {
 
 model Client {
   id            String      @id @default(uuid())
+  // FUN-18: enlace formal Cuenta↔Cliente. La identidad del portal CLIENT se
+  // resuelve por esta relación (claim clientId en el JWT), nunca comparando
+  // emails ni IDs enviados por el frontend. Nullable: clientes sin cuenta de
+  // portal son válidos (walk-in); una cuenta CLIENT sin Client enlazado no ve
+  // ningún recurso (fail-closed).
+  accountId     String?     @unique
+  account       Account?    @relation(fields: [accountId], references: [id])
   type          ClientType  @default(INDIVIDUAL)
   firstName     String
   lastName      String?

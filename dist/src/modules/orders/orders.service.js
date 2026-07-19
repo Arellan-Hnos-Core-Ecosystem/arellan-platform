@@ -36,6 +36,20 @@ const ORDER_INCLUDE = {
         select: { id: true, name: true, email: true, role: true },
     },
 };
+const MAX_PHOTOS_PER_ORDER = 30;
+function isImageBuffer(buffer) {
+    if (buffer.length < 12)
+        return false;
+    if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff)
+        return true;
+    if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47 &&
+        buffer[4] === 0x0d && buffer[5] === 0x0a && buffer[6] === 0x1a && buffer[7] === 0x0a)
+        return true;
+    if (buffer.toString("ascii", 0, 4) === "RIFF" &&
+        buffer.toString("ascii", 8, 12) === "WEBP")
+        return true;
+    return false;
+}
 let OrdersService = OrdersService_1 = class OrdersService {
     prisma;
     wsGateway;
@@ -47,6 +61,12 @@ let OrdersService = OrdersService_1 = class OrdersService {
         this.wsGateway = wsGateway;
         this.config = config;
         this.iotBridge = iotBridge;
+    }
+    static assertMutationScope(order, requester) {
+        if ((requester.role === "MECHANIC" || requester.role === "TRAINEE") &&
+            order.mechanicId !== requester.id) {
+            throw new common_1.NotFoundException("Orden de trabajo no encontrada");
+        }
     }
     async create(dto, userId) {
         const year = new Date().getFullYear();
@@ -97,6 +117,7 @@ let OrdersService = OrdersService_1 = class OrdersService {
                 skip: (currentPage - 1) * size,
                 orderBy: { receivedAt: "desc" },
                 include: ORDER_INCLUDE,
+                omit: { photos: true },
             });
             return { data: pagedOrders, nextCursor: null };
         }
@@ -107,6 +128,32 @@ let OrdersService = OrdersService_1 = class OrdersService {
             orderBy: { id: "asc" },
             ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
             include: ORDER_INCLUDE,
+            omit: { photos: true },
+        });
+        const hasMore = orders.length > limit;
+        const data = hasMore ? orders.slice(0, limit) : orders;
+        const nextCursor = hasMore ? data[data.length - 1].id : null;
+        return { data, nextCursor };
+    }
+    async findAllForClient(clientId, filters) {
+        if (!clientId) {
+            throw new common_1.ForbiddenException({
+                message: "Tu cuenta no está vinculada a un cliente del taller. Contacta al administrador.",
+                code: "CLIENT_NOT_LINKED",
+            });
+        }
+        const { limit = 20, cursor } = filters;
+        const take = limit + 1;
+        const orders = await this.prisma.workOrder.findMany({
+            where: { clientId },
+            take,
+            orderBy: { id: "asc" },
+            ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+            include: {
+                vehicle: true,
+                mechanic: { select: { id: true, name: true } },
+            },
+            omit: { photos: true },
         });
         const hasMore = orders.length > limit;
         const data = hasMore ? orders.slice(0, limit) : orders;
@@ -130,17 +177,20 @@ let OrdersService = OrdersService_1 = class OrdersService {
         if (requester && !["OWNER", "ADMIN", "FINANCE"].includes(requester.role)) {
             const isAssignedMechanic = (requester.role === "MECHANIC" || requester.role === "TRAINEE") &&
                 order.mechanicId === requester.id;
-            const isOwningClient = requester.role === "CLIENT" && order.clientId === requester.id;
+            const isOwningClient = requester.role === "CLIENT" &&
+                !!requester.clientId &&
+                order.clientId === requester.clientId;
             if (!isAssignedMechanic && !isOwningClient) {
                 throw new common_1.NotFoundException("Orden de trabajo no encontrada");
             }
         }
         return order;
     }
-    async update(id, dto) {
+    async update(id, dto, requester) {
         const order = await this.prisma.workOrder.findUnique({ where: { id } });
         if (!order)
             throw new common_1.NotFoundException("Orden de trabajo no encontrada");
+        OrdersService_1.assertMutationScope(order, requester);
         if (dto.status && order.status === client_1.OrderStatus.CANCELLED) {
             throw new common_1.ConflictException("No se puede modificar una orden cancelada");
         }
@@ -168,10 +218,12 @@ let OrdersService = OrdersService_1 = class OrdersService {
         this.logger.log(`OT ${updated.number} actualizada`);
         return updated;
     }
-    async updateStatus(id, dto, userId) {
+    async updateStatus(id, dto, requester) {
+        const userId = requester.id;
         const order = await this.prisma.workOrder.findUnique({ where: { id } });
         if (!order)
             throw new common_1.NotFoundException("Orden de trabajo no encontrada");
+        OrdersService_1.assertMutationScope(order, requester);
         const allowed = VALID_TRANSITIONS[order.status];
         if (!allowed.includes(dto.status)) {
             throw new common_1.ConflictException(`No se puede cambiar de ${order.status} a ${dto.status}. ` +
@@ -267,6 +319,15 @@ let OrdersService = OrdersService_1 = class OrdersService {
         if (order.status === client_1.OrderStatus.CANCELLED || order.status === client_1.OrderStatus.DELIVERED) {
             throw new common_1.ConflictException("No se puede reasignar una orden finalizada o cancelada");
         }
+        const mechanic = await this.prisma.account.findUnique({
+            where: { id: mechanicId },
+            select: { role: true, status: true },
+        });
+        if (!mechanic ||
+            mechanic.status !== "ACTIVE" ||
+            ![client_1.UserRole.MECHANIC, client_1.UserRole.TRAINEE].includes(mechanic.role)) {
+            throw new common_1.BadRequestException("El destinatario no es un mecanico activo valido");
+        }
         const updated = await this.prisma.workOrder.update({
             where: { id },
             data: { mechanicId },
@@ -291,6 +352,7 @@ let OrdersService = OrdersService_1 = class OrdersService {
                 statusHistory: { orderBy: { timestamp: "desc" } },
                 events: { orderBy: { createdAt: "desc" } },
             },
+            omit: { photos: true },
         });
         const hasMore = orders.length > limit;
         const data = hasMore ? orders.slice(0, limit) : orders;
@@ -335,41 +397,11 @@ let OrdersService = OrdersService_1 = class OrdersService {
             lowStockCount: lowStock,
         };
     }
-    async addItem(orderId, dto, userId) {
-        const order = await this.prisma.workOrder.findUnique({ where: { id: orderId } });
-        if (!order)
-            throw new common_1.NotFoundException("Orden no encontrada");
-        if (["DELIVERED", "CANCELLED"].includes(order.status)) {
-            throw new common_1.ConflictException("No se pueden modificar ordenes finalizadas");
-        }
-        const item = await this.prisma.inventoryItem.findUnique({ where: { id: dto.itemId } });
-        if (!item)
-            throw new common_1.NotFoundException("Item de inventario no encontrado");
-        if (item.stock < dto.quantity) {
-            throw new common_1.ConflictException(`Stock insuficiente. Disponible: ${item.stock}, solicitado: ${dto.quantity}`);
-        }
-        const [orderPart] = await this.prisma.$transaction([
-            this.prisma.workOrderPart.create({
-                data: { orderId, itemId: dto.itemId, quantity: dto.quantity, unitPrice: dto.unitPrice },
-            }),
-            this.prisma.inventoryMovement.create({
-                data: { itemId: dto.itemId, type: "OUT", quantity: dto.quantity, orderId, authorizedBy: userId, unitCost: item.unitPrice, justification: `Consumo en OT ${order.number}` },
-            }),
-            this.prisma.inventoryItem.update({
-                where: { id: dto.itemId },
-                data: { stock: item.stock - dto.quantity },
-            }),
-            this.prisma.workOrderEvent.create({
-                data: { workOrderId: orderId, event: "PART_ADDED", description: `Repuesto ${item.name} x${dto.quantity} agregado`, userId },
-            }),
-        ]);
-        this.logger.log(`Item ${item.sku} x${dto.quantity} agregado a OT ${order.number}`);
-        return orderPart;
-    }
     async applyDiscount(orderId, dto, userId, userRole) {
         const order = await this.prisma.workOrder.findUnique({ where: { id: orderId } });
         if (!order)
             throw new common_1.NotFoundException("Orden no encontrada");
+        OrdersService_1.assertMutationScope(order, { id: userId, role: userRole });
         if (["DELIVERED", "CANCELLED"].includes(order.status)) {
             throw new common_1.ConflictException("No se puede aplicar descuento a ordenes finalizadas");
         }
@@ -410,10 +442,18 @@ let OrdersService = OrdersService_1 = class OrdersService {
         this.logger.log(`Descuento ${discountPct.toFixed(1)}% aplicado a OT ${order.number}`);
         return updated;
     }
-    async uploadPhoto(orderId, photo, description) {
+    async uploadPhoto(orderId, photo, requester, description) {
         const order = await this.prisma.workOrder.findUnique({ where: { id: orderId } });
         if (!order)
             throw new common_1.NotFoundException("Orden de trabajo no encontrada");
+        OrdersService_1.assertMutationScope(order, requester);
+        if (!isImageBuffer(photo.buffer)) {
+            throw new common_1.BadRequestException("El archivo no es una imagen válida (JPEG/PNG/WebP)");
+        }
+        const photoCount = await this.prisma.workOrderPhoto.count({ where: { orderId } });
+        if (photoCount >= MAX_PHOTOS_PER_ORDER) {
+            throw new common_1.ConflictException(`La OT ya tiene el máximo de ${MAX_PHOTOS_PER_ORDER} fotos permitidas`);
+        }
         const url = `data:${photo.mimetype};base64,${photo.buffer.toString("base64")}`;
         const hash = (0, crypto_1.createHash)("sha256").update(photo.buffer).digest("hex");
         await this.prisma.workOrderPhoto.create({
@@ -435,69 +475,18 @@ let OrdersService = OrdersService_1 = class OrdersService {
                 description: description
                     ? `Foto cargada: ${description}`
                     : "Foto del vehiculo cargada al sistema",
-                userId: order.createdBy,
+                userId: requester.id,
             },
         });
         this.logger.log(`Foto subida a OT ${order.number}`);
         return { success: true, url };
     }
-    async requestParts(orderId, dto, userId, userName) {
+    async reportProgress(orderId, dto, requester, userName) {
+        const userId = requester.id;
         const order = await this.prisma.workOrder.findUnique({ where: { id: orderId } });
         if (!order)
             throw new common_1.NotFoundException("Orden de trabajo no encontrada");
-        if (order.status !== "IN_PROGRESS") {
-            throw new common_1.HttpException({
-                statusCode: 422,
-                error: "INVENTORY_NO_ACTIVE_ORDER",
-                message: `Solo se puede solicitar repuestos para OT en estado IN_PROGRESS. OT ${order.number} está en estado ${order.status}.`,
-            }, common_1.HttpStatus.UNPROCESSABLE_ENTITY);
-        }
-        const results = await this.prisma.$transaction(async (tx) => {
-            const created = [];
-            for (const req of dto.items) {
-                const item = await tx.inventoryItem.findUnique({ where: { id: req.itemId } });
-                if (!item)
-                    throw new common_1.NotFoundException(`Item de inventario no encontrado: ${req.itemId}`);
-                if (item.stock < req.quantity) {
-                    throw new common_1.ConflictException(`Stock insuficiente para ${item.name}. Disponible: ${item.stock}, solicitado: ${req.quantity}`);
-                }
-                const part = await tx.workOrderPart.create({
-                    data: { orderId, itemId: req.itemId, quantity: req.quantity, unitPrice: item.unitPrice },
-                });
-                await tx.inventoryMovement.create({
-                    data: {
-                        itemId: req.itemId,
-                        type: "OUT",
-                        quantity: req.quantity,
-                        orderId,
-                        authorizedBy: userId,
-                        unitCost: item.costPrice,
-                        justification: `Consumo en OT ${order.number}`,
-                    },
-                });
-                await tx.inventoryItem.update({
-                    where: { id: req.itemId },
-                    data: { stock: item.stock - req.quantity },
-                });
-                await tx.workOrderEvent.create({
-                    data: {
-                        workOrderId: orderId,
-                        event: "PART_REQUESTED",
-                        description: `${userName} solicitó repuesto: ${item.name} x${req.quantity} para OT ${order.number}`,
-                        userId,
-                    },
-                });
-                created.push(part);
-            }
-            return created;
-        });
-        this.logger.log(`${dto.items.length} repuesto(s) solicitado(s) para OT ${order.number}`);
-        return { success: true, parts: results };
-    }
-    async reportProgress(orderId, dto, userId, userName) {
-        const order = await this.prisma.workOrder.findUnique({ where: { id: orderId } });
-        if (!order)
-            throw new common_1.NotFoundException("Orden de trabajo no encontrada");
+        OrdersService_1.assertMutationScope(order, requester);
         const desc = dto.notes
             ? `${userName} registró avance técnico: ${dto.notes} (${dto.progressPercent}%)`
             : `${userName} reportó avance del ${dto.progressPercent}% - ${dto.partsInstalled} repuestos instalados, ${dto.laborHours}h trabajadas`;
@@ -526,10 +515,12 @@ let OrdersService = OrdersService_1 = class OrdersService {
         this.logger.log(`Avance registrado en OT ${order.number}: ${dto.progressPercent}%`);
         return { success: true, event };
     }
-    async deletePhoto(orderId, photoId, userId, userName) {
+    async deletePhoto(orderId, photoId, requester, userName) {
+        const userId = requester.id;
         const order = await this.prisma.workOrder.findUnique({ where: { id: orderId } });
         if (!order)
             throw new common_1.NotFoundException("Orden de trabajo no encontrada");
+        OrdersService_1.assertMutationScope(order, requester);
         const photo = await this.prisma.workOrderPhoto.findFirst({
             where: { id: photoId, orderId },
         });
@@ -557,6 +548,11 @@ let OrdersService = OrdersService_1 = class OrdersService {
         if (photos.length < work_order_entity_1.WorkOrder.REQUIRED_CHECKIN_POSITIONS.length) {
             throw new common_1.BadRequestException(`Regla Anti-Fraude #8: Se requieren ${work_order_entity_1.WorkOrder.REQUIRED_CHECKIN_POSITIONS.length} fotos obligatorias ` +
                 `(${work_order_entity_1.WorkOrder.REQUIRED_CHECKIN_POSITIONS.join(", ")}). Recibidas: ${photos.length}`);
+        }
+        for (const photo of photos) {
+            if (!isImageBuffer(photo.buffer)) {
+                throw new common_1.BadRequestException("Una de las fotos de check-in no es una imagen válida (JPEG/PNG/WebP)");
+            }
         }
         const suppliedPositions = (body.photoPositions ?? "")
             .split(",")
@@ -679,6 +675,13 @@ let OrdersService = OrdersService_1 = class OrdersService {
         }
         const mimeType = dto.mimeType ?? "image/jpeg";
         const buffer = Buffer.from(dto.imageBase64, "base64");
+        if (!isImageBuffer(buffer)) {
+            throw new common_1.BadRequestException("La captura no es una imagen válida (JPEG/PNG/WebP)");
+        }
+        const existingPhotos = await this.prisma.workOrderPhoto.count({ where: { orderId } });
+        if (existingPhotos >= MAX_PHOTOS_PER_ORDER) {
+            throw new common_1.ConflictException(`La OT ya tiene el máximo de ${MAX_PHOTOS_PER_ORDER} fotos permitidas`);
+        }
         const hash = (0, crypto_1.createHash)("sha256").update(buffer).digest("hex");
         const url = `data:${mimeType};base64,${dto.imageBase64}`;
         const updated = await this.prisma.$transaction(async (tx) => {
@@ -704,11 +707,12 @@ let OrdersService = OrdersService_1 = class OrdersService {
         this.logger.log(`Captura ONVIF (${position}) vinculada a OT ${order.number} desde camara ${dto.cameraId}`);
         return { orderId, orderNumber: order.number, position, hash, photoCount: updated.photos.length };
     }
-    async requestCameraCapture(orderId, position) {
+    async requestCameraCapture(orderId, position, requester) {
         const order = await this.prisma.workOrder.findUnique({ where: { id: orderId } });
         if (!order) {
             throw new common_1.NotFoundException("OT no encontrada");
         }
+        OrdersService_1.assertMutationScope(order, requester);
         const pos = position.toUpperCase().trim();
         const allowedPositions = work_order_entity_1.WorkOrder.REQUIRED_CHECKIN_POSITIONS;
         if (!allowedPositions.includes(pos)) {

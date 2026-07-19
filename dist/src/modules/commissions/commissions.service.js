@@ -53,7 +53,7 @@ let CommissionsService = CommissionsService_1 = class CommissionsService {
         ]);
         return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
     }
-    async create(dto, requestingUserRole, requestingUserId) {
+    async create(dto, requestingUserRole, _requestingUserId) {
         if (requestingUserRole !== "OWNER") {
             throw new common_1.ForbiddenException("Solo el OWNER puede crear comisiones");
         }

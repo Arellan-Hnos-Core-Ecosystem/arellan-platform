@@ -9,14 +9,15 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.CryptoModule = void 0;
 const common_1 = require("@nestjs/common");
 const integrity_hash_service_1 = require("./integrity-hash.service");
+const secret_cipher_service_1 = require("./secret-cipher.service");
 let CryptoModule = class CryptoModule {
 };
 exports.CryptoModule = CryptoModule;
 exports.CryptoModule = CryptoModule = __decorate([
     (0, common_1.Global)(),
     (0, common_1.Module)({
-        providers: [integrity_hash_service_1.IntegrityHashService],
-        exports: [integrity_hash_service_1.IntegrityHashService],
+        providers: [integrity_hash_service_1.IntegrityHashService, secret_cipher_service_1.SecretCipherService],
+        exports: [integrity_hash_service_1.IntegrityHashService, secret_cipher_service_1.SecretCipherService],
     })
 ], CryptoModule);
 //# sourceMappingURL=crypto.module.js.map

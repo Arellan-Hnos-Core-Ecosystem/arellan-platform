@@ -170,7 +170,7 @@ export declare class PurchasesService {
         commissionPaid: boolean;
         orderedAt: Date | null;
     }>;
-    updateStatus(id: string, status: PurchaseStatus, userId: string): Promise<{
+    updateStatus(id: string, status: PurchaseStatus, _userId: string): Promise<{
         items: {
             id: string;
             notes: string | null;

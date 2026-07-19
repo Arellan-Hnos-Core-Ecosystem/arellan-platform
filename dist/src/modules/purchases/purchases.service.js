@@ -156,7 +156,7 @@ let PurchasesService = PurchasesService_1 = class PurchasesService {
         this.logger.log(`Compra creada: ${number} - ${supplier.name}`);
         return purchase;
     }
-    async updateStatus(id, status, userId) {
+    async updateStatus(id, status, _userId) {
         const purchase = await this.prisma.purchase.findUnique({ where: { id } });
         if (!purchase) {
             throw new common_1.NotFoundException("Compra no encontrada");

@@ -23,12 +23,16 @@ let JwtStrategy = class JwtStrategy extends (0, passport_1.PassportStrategy)(pas
         });
     }
     validate(payload) {
+        if (!payload.id || payload.mfaPending === true) {
+            throw new common_1.UnauthorizedException("Token de acceso invalido");
+        }
         return {
             id: payload.id,
             email: payload.email,
             role: payload.role,
             name: payload.name,
             mfaVerified: payload.mfaVerified,
+            clientId: payload.clientId ?? null,
         };
     }
 };

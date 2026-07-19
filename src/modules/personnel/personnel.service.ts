@@ -583,13 +583,13 @@ export class PersonnelService {
     return updated
   }
 
-  async checkInByUser(userId: string, notes?: string) {
+  async checkInByUser(userId: string, _notes?: string) {
     const personnel = await this.prisma.personnel.findUnique({ where: { accountId: userId } })
     if (!personnel) throw new NotFoundException("Personal no encontrado para este usuario")
     return this.checkIn(personnel.id)
   }
 
-  async checkOutByUser(userId: string, notes?: string) {
+  async checkOutByUser(userId: string, _notes?: string) {
     const personnel = await this.prisma.personnel.findUnique({ where: { accountId: userId } })
     if (!personnel) throw new NotFoundException("Personal no encontrado para este usuario")
     return this.checkOut(personnel.id)

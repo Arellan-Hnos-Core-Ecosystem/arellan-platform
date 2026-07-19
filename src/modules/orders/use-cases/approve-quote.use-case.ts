@@ -10,9 +10,23 @@ export class ApproveQuoteUseCase {
     private readonly wsGateway: RealtimeGateway,
   ) {}
 
+  // SEC-23/FUN-18: una cuenta CLIENT sólo puede aprobar/rechazar la cotización
+  // de SU propia OT (claim clientId del JWT — relación Client.accountId). 404
+  // para no revelar existencia de OTs ajenas.
+  private static assertClientOwnership(
+    order: { clientId: string },
+    requester: { role?: string; clientId?: string | null },
+  ): void {
+    if (requester.role === "CLIENT" && order.clientId !== requester.clientId) {
+      throw new NotFoundException("Orden de trabajo no encontrada")
+    }
+  }
+
   async execute(orderId: string, params: {
     clientSignature: string
     approverId: string
+    approverRole?: string
+    approverClientId?: string | null
   }) {
     const order = await this.prisma.workOrder.findUnique({
       where: { id: orderId },
@@ -23,6 +37,10 @@ export class ApproveQuoteUseCase {
       },
     })
     if (!order) throw new NotFoundException("Orden de trabajo no encontrada")
+    ApproveQuoteUseCase.assertClientOwnership(order, {
+      role: params.approverRole,
+      clientId: params.approverClientId,
+    })
     if (order.status !== OrderStatus.BUDGETED) {
       throw new ConflictException(`Solo se puede aprobar cotizaciones en estado BUDGETED. Estado actual: ${order.status}`)
     }
@@ -103,12 +121,21 @@ export class ApproveQuoteUseCase {
     }
   }
 
-  async reject(orderId: string, params: { reason: string; rejectedBy: string }) {
+  async reject(orderId: string, params: {
+    reason: string
+    rejectedBy: string
+    rejectorRole?: string
+    rejectorClientId?: string | null
+  }) {
     const order = await this.prisma.workOrder.findUnique({
       where: { id: orderId },
       include: { quote: true },
     })
     if (!order) throw new NotFoundException("Orden de trabajo no encontrada")
+    ApproveQuoteUseCase.assertClientOwnership(order, {
+      role: params.rejectorRole,
+      clientId: params.rejectorClientId,
+    })
     if (!order.quote || order.quote.status !== QuoteStatus.SENT) {
       throw new BadRequestException("No hay cotización SENT activa para rechazar")
     }

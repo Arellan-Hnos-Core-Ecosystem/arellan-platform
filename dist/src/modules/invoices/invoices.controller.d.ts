@@ -124,6 +124,7 @@ export declare class InvoicesController {
             createdAt: Date;
             updatedAt: Date;
             deletedAt: Date | null;
+            accountId: string | null;
             dni: string | null;
             firstName: string;
             lastName: string | null;

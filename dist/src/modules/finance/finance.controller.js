@@ -17,6 +17,7 @@ const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
 const finance_service_1 = require("./finance.service");
 const close_cashbox_session_use_case_1 = require("./use-cases/close-cashbox-session.use-case");
+const auth_service_1 = require("../auth/auth.service");
 const jwt_auth_guard_1 = require("../../common/guards/jwt-auth.guard");
 const roles_guard_1 = require("../../common/guards/roles.guard");
 const mfa_required_guard_1 = require("../../common/guards/mfa-required.guard");
@@ -27,9 +28,11 @@ const finance_dto_1 = require("./dto/finance.dto");
 let FinanceController = class FinanceController {
     financeService;
     closeCashboxSessionUseCase;
-    constructor(financeService, closeCashboxSessionUseCase) {
+    authService;
+    constructor(financeService, closeCashboxSessionUseCase, authService) {
         this.financeService = financeService;
         this.closeCashboxSessionUseCase = closeCashboxSessionUseCase;
+        this.authService = authService;
     }
     openCashbox(user, dto) {
         return this.financeService.openCashbox(user.id, dto);
@@ -68,17 +71,9 @@ let FinanceController = class FinanceController {
         return this.financeService.getCashboxHistory(limit, cursor);
     }
     async overrideCashbox(user, dto) {
-        const { authenticator } = await Promise.resolve().then(() => require("otplib"));
-        const owner = await this.financeService["prisma"].account.findUnique({
-            where: { id: user.id },
-            select: { mfaSecret: true, mfaEnabled: true },
-        });
-        if (!owner?.mfaEnabled || !owner?.mfaSecret) {
-            throw new common_1.BadRequestException("El OWNER no tiene MFA configurado. Configure Google Authenticator primero.");
-        }
-        const isValid = authenticator.verify({ token: dto.totpCode, secret: owner.mfaSecret });
+        const isValid = await this.authService.verifyTotpForAccount(user.id, dto.totpCode);
         if (!isValid) {
-            throw new common_1.BadRequestException("Código TOTP inválido o expirado.");
+            throw new common_1.BadRequestException("Código TOTP inválido, expirado o MFA no configurada para este OWNER.");
         }
         const session = await this.financeService["prisma"].cashboxSession.findUnique({
             where: { id: dto.sessionId },
@@ -336,6 +331,7 @@ exports.FinanceController = FinanceController = __decorate([
     (0, swagger_1.ApiTags)("Finance"),
     (0, common_1.Controller)("finance"),
     __metadata("design:paramtypes", [finance_service_1.FinanceService,
-        close_cashbox_session_use_case_1.CloseCashboxSessionUseCase])
+        close_cashbox_session_use_case_1.CloseCashboxSessionUseCase,
+        auth_service_1.AuthService])
 ], FinanceController);
 //# sourceMappingURL=finance.controller.js.map

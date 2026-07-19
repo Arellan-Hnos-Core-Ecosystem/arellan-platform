@@ -42,6 +42,10 @@ let CompleteWorkOrderUseCase = class CompleteWorkOrderUseCase {
         });
         if (!order)
             throw new common_1.NotFoundException("Orden de trabajo no encontrada");
+        if ((params.userRole === "MECHANIC" || params.userRole === "TRAINEE") &&
+            order.mechanicId !== params.userId) {
+            throw new common_1.NotFoundException("Orden de trabajo no encontrada");
+        }
         if (order.status !== client_1.OrderStatus.IN_PROGRESS) {
             throw new common_1.ConflictException(`Solo se puede finalizar trabajo de OT en estado IN_PROGRESS. Estado actual: ${order.status}`);
         }

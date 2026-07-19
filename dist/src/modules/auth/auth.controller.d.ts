@@ -18,6 +18,20 @@ export declare class AuthController {
         mfaPending: boolean;
         sessionToken: string;
         message: string;
+    } | {
+        mfaEnrollmentRequired: boolean;
+        message: string;
+        accessToken: string;
+        refreshToken: string;
+        user: {
+            id: string;
+            email: string;
+            name: string;
+            role: import("@prisma/client").$Enums.UserRole;
+            mfaEnabled: boolean;
+        };
+        mfaPending?: undefined;
+        sessionToken?: undefined;
     }>;
     mechanicLogin(dto: MechanicLoginDto, req: any, res: Response): Promise<{
         accessToken: string;
@@ -77,7 +91,6 @@ export declare class AuthController {
     getSessions(user: AuthUser): Promise<{
         id: string;
         createdAt: Date;
-        token: string;
         ipAddress: string | null;
         expiresAt: Date;
         deviceInfo: string | null;

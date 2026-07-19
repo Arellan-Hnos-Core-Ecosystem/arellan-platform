@@ -5,7 +5,7 @@ import { AuthGuard } from "@nestjs/passport"
 export class JwtAuthGuard extends AuthGuard("jwt") {
   private readonly logger = new Logger(JwtAuthGuard.name)
 
-  handleRequest(err: any, user: any, info: any, context: ExecutionContext) {
+  handleRequest(err: any, user: any, info: any, _context: ExecutionContext) {
     if (err || !user) {
       this.logger.warn(`Auth failed: ${info?.message || "no user"}`)
       throw err || new UnauthorizedException("Token invalido o expirado")

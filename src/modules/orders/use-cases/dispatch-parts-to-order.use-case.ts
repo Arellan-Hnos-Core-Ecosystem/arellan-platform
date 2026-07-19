@@ -19,12 +19,22 @@ export class DispatchPartsToOrderUseCase {
     items: Array<{ itemId: string; quantity: number }>
     requestedBy: string
     requestedByName: string
+    requesterRole: string
   }) {
     const order = await this.prisma.workOrder.findUnique({
       where: { id: orderId },
-      select: { id: true, number: true, status: true },
+      select: { id: true, number: true, status: true, mechanicId: true },
     })
     if (!order) throw new NotFoundException("Orden de trabajo no encontrada")
+
+    // SEC-23: un MECHANIC/TRAINEE sólo despacha repuestos (descuenta stock) a
+    // SU OT asignada — antes podía drenar inventario hacia cualquier OT por id.
+    if (
+      (params.requesterRole === "MECHANIC" || params.requesterRole === "TRAINEE") &&
+      order.mechanicId !== params.requestedBy
+    ) {
+      throw new NotFoundException("Orden de trabajo no encontrada")
+    }
 
     if (order.status !== "IN_PROGRESS") {
       throw new HttpException(

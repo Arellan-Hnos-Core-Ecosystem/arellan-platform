@@ -2,8 +2,6 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
-  ForbiddenException,
-  BadRequestException,
   Logger,
 } from "@nestjs/common"
 import { PrismaService } from "../../common/prisma/prisma.service"
@@ -13,8 +11,6 @@ import { LandedCost } from "../../domain/inventory"
 import {
   PurchaseFilterDto,
   CreatePurchaseDto,
-  UpdatePurchaseStatusDto,
-  ReceiveItemDto,
   ReceiveItemsDto,
 } from "./dto/purchases.dto"
 
@@ -172,7 +168,7 @@ export class PurchasesService {
     return purchase
   }
 
-  async updateStatus(id: string, status: PurchaseStatus, userId: string) {
+  async updateStatus(id: string, status: PurchaseStatus, _userId: string) {
     const purchase = await this.prisma.purchase.findUnique({ where: { id } })
     if (!purchase) {
       throw new NotFoundException("Compra no encontrada")

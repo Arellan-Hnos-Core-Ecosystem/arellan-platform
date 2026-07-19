@@ -4,9 +4,12 @@ export declare class ApproveQuoteUseCase {
     private readonly prisma;
     private readonly wsGateway;
     constructor(prisma: PrismaService, wsGateway: RealtimeGateway);
+    private static assertClientOwnership;
     execute(orderId: string, params: {
         clientSignature: string;
         approverId: string;
+        approverRole?: string;
+        approverClientId?: string | null;
     }): Promise<{
         success: boolean;
         orderId: string;
@@ -18,6 +21,8 @@ export declare class ApproveQuoteUseCase {
     reject(orderId: string, params: {
         reason: string;
         rejectedBy: string;
+        rejectorRole?: string;
+        rejectorClientId?: string | null;
     }): Promise<{
         success: boolean;
         orderId: string;

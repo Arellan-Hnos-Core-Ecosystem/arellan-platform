@@ -2,6 +2,8 @@ import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
 import { PrismaService } from "../../common/prisma/prisma.service";
 import { RedisService } from "../../common/redis/redis.service";
+import { SecretCipherService } from "../../common/crypto/secret-cipher.service";
+import { RealtimeGateway } from "../../common/gateway/realtime.gateway";
 import { LoginDto, MfaVerifyDto, RegisterDto, ChangePasswordDto } from "./dto/auth.dto";
 import { UserRole } from "@prisma/client";
 export interface AuthUser {
@@ -10,14 +12,18 @@ export interface AuthUser {
     role: UserRole;
     name: string;
     mfaVerified: boolean;
+    clientId?: string | null;
 }
 export declare class AuthService {
     private readonly prisma;
     private readonly jwt;
     private readonly config;
     private readonly redis;
+    private readonly secretCipher;
+    private readonly realtimeGateway;
     private readonly logger;
-    constructor(prisma: PrismaService, jwt: JwtService, config: ConfigService, redis: RedisService);
+    constructor(prisma: PrismaService, jwt: JwtService, config: ConfigService, redis: RedisService, secretCipher: SecretCipherService, realtimeGateway: RealtimeGateway);
+    private static hashToken;
     login(dto: LoginDto, ip: string, userAgent?: string): Promise<{
         accessToken: string;
         refreshToken: string;
@@ -32,6 +38,20 @@ export declare class AuthService {
         mfaPending: boolean;
         sessionToken: string;
         message: string;
+    } | {
+        mfaEnrollmentRequired: boolean;
+        message: string;
+        accessToken: string;
+        refreshToken: string;
+        user: {
+            id: string;
+            email: string;
+            name: string;
+            role: import("@prisma/client").$Enums.UserRole;
+            mfaEnabled: boolean;
+        };
+        mfaPending?: undefined;
+        sessionToken?: undefined;
     }>;
     mechanicLogin(pin: string, ip: string, userAgent?: string): Promise<{
         accessToken: string;
@@ -55,7 +75,7 @@ export declare class AuthService {
             mfaEnabled: boolean;
         };
     }>;
-    generateMfaSecret(userId: string): Promise<{
+    generateMfaSecret(user: Pick<AuthUser, "id" | "mfaVerified">): Promise<{
         secret: string;
         otpauth: string;
     }>;
@@ -97,9 +117,10 @@ export declare class AuthService {
         status: import("@prisma/client").$Enums.AccountStatus;
         createdAt: Date;
     }>;
-    storeSession(accountId: string, token: string): Promise<void>;
-    invalidateSession(accountId: string, token: string): Promise<void>;
+    storeSession(accountId: string, tokenHash: string): Promise<void>;
+    invalidateSession(accountId: string, tokenHash: string): Promise<void>;
     invalidateAllSessions(accountId: string): Promise<void>;
+    private revokeAllUserSessions;
     getActiveSessions(accountId: string): Promise<string[]>;
     logoutAll(accountId: string): Promise<{
         message: string;
@@ -107,7 +128,6 @@ export declare class AuthService {
     getSessions(userId: string): Promise<{
         id: string;
         createdAt: Date;
-        token: string;
         ipAddress: string | null;
         expiresAt: Date;
         deviceInfo: string | null;
@@ -159,6 +179,7 @@ export declare class AuthService {
         updatedAt: Date;
         deletedAt: Date | null;
     }>;
+    verifyTotpForAccount(accountId: string, token: string): Promise<boolean>;
     private generateTokens;
     private scanKeys;
 }

@@ -35,6 +35,7 @@ import { AnalyticsModule } from "./modules/analytics/analytics.module"
 import { AuditInterceptor } from "./common/interceptors/audit.interceptor"
 import { DataMaskingInterceptor } from "./common/interceptors/data-masking.interceptor"
 import { AntiFraudInterceptor } from "./common/anti-fraud/anti-fraud.interceptor"
+import { MfaEnforcementInterceptor } from "./common/interceptors/mfa-enforcement.interceptor"
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -72,6 +73,10 @@ import { AntiFraudInterceptor } from "./common/anti-fraud/anti-fraud.interceptor
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // SEC-05-bis: enforcement global de MFA para roles privilegiados (regla #9).
+    // Corre tras los guards (req.user presente); bloquea toda ruta no-/auth a
+    // privilegiados sin TOTP verificado. Primero, para fallar rápido.
+    { provide: APP_INTERCEPTOR, useClass: MfaEnforcementInterceptor },
     // SEC-01: interceptor anti-fraude global (corre tras la autenticación).
     { provide: APP_INTERCEPTOR, useClass: AntiFraudInterceptor },
     { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },

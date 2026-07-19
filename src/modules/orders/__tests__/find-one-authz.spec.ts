@@ -57,13 +57,17 @@ describe("OrdersService.findOne authorization (SEC-20 / BOLA)", () => {
     ).rejects.toThrow(NotFoundException)
   })
 
-  it("lets the owning client read their own order but blocks others", async () => {
+  it("lets the owning client read their own order but blocks others (clientId claim, FUN-18)", async () => {
     const { service } = buildService(ORDER)
     await expect(
-      service.findOne(ORDER_ID, { id: OWNING_CLIENT, role: "CLIENT" }),
+      service.findOne(ORDER_ID, { id: "acc-roberto", role: "CLIENT", clientId: OWNING_CLIENT }),
     ).resolves.toMatchObject({ id: ORDER_ID })
     await expect(
-      service.findOne(ORDER_ID, { id: "client-2", role: "CLIENT" }),
+      service.findOne(ORDER_ID, { id: "acc-x", role: "CLIENT", clientId: "client-2" }),
+    ).rejects.toThrow(NotFoundException)
+    // Cuenta CLIENT sin Client enlazado: fail-closed
+    await expect(
+      service.findOne(ORDER_ID, { id: OWNING_CLIENT, role: "CLIENT" }),
     ).rejects.toThrow(NotFoundException)
   })
 

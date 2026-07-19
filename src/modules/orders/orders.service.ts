@@ -1,9 +1,9 @@
-import { Injectable, NotFoundException, ConflictException, Logger, BadRequestException, HttpException, HttpStatus } from "@nestjs/common"
+import { Injectable, NotFoundException, ConflictException, Logger, BadRequestException, ForbiddenException } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
 import { createHash } from "crypto"
 import { PrismaService } from "../../common/prisma/prisma.service"
 import { OrderStatus, Prisma, PaymentMethod, UserRole, ApprovalType, ApprovalStatus } from "@prisma/client"
-import { CreateOrderDto, UpdateOrderDto, UpdateStatusDto, OrderFilterDto, PaginatedResult, ApplyDiscountDto, RequestPartsDto, MechanicProgressDto, VehicleCheckinDto, CameraCaptureDto } from "./dto/orders.dto"
+import { CreateOrderDto, UpdateOrderDto, UpdateStatusDto, OrderFilterDto, PaginatedResult, ApplyDiscountDto, MechanicProgressDto, VehicleCheckinDto, CameraCaptureDto } from "./dto/orders.dto"
 import { RealtimeGateway } from "../../common/gateway/realtime.gateway"
 import { WorkOrder } from "../../domain/work-orders/entities/work-order.entity"
 import { IotBridgeClient } from "../../common/iot-bridge/iot-bridge.client"
@@ -27,6 +27,37 @@ const ORDER_INCLUDE = {
   },
 } satisfies Prisma.WorkOrderInclude
 
+// Identidad del solicitante, SIEMPRE derivada del JWT (req.user) — nunca del
+// payload. clientId sólo presente en cuentas CLIENT (FUN-18).
+export interface OrderRequester {
+  id: string
+  role: string
+  clientId?: string | null
+}
+
+// PERF-01: tope de fotos persistidas por OT (además del límite de 8MB por
+// archivo). Evita crecimiento ilimitado de filas base64 en PostgreSQL.
+const MAX_PHOTOS_PER_ORDER = 30
+
+// PERF-01: validación de imagen por CONTENIDO (magic bytes), no por extensión
+// ni Content-Type declarado por el cliente.
+function isImageBuffer(buffer: Buffer): boolean {
+  if (buffer.length < 12) return false
+  // JPEG: FF D8 FF
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return true
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (
+    buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47 &&
+    buffer[4] === 0x0d && buffer[5] === 0x0a && buffer[6] === 0x1a && buffer[7] === 0x0a
+  ) return true
+  // WebP: "RIFF"...."WEBP"
+  if (
+    buffer.toString("ascii", 0, 4) === "RIFF" &&
+    buffer.toString("ascii", 8, 12) === "WEBP"
+  ) return true
+  return false
+}
+
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name)
@@ -37,6 +68,23 @@ export class OrdersService {
     private readonly config: ConfigService,
     private readonly iotBridge: IotBridgeClient,
   ) {}
+
+  // SEC-23: paridad de autorización HTTP↔WS. Un MECHANIC/TRAINEE sólo puede
+  // mutar la OT que tiene asignada (misma regla que el handler WS
+  // `mechanic:progress` de SEC-13); la gestión (OWNER/ADMIN/FINANCE) no está
+  // restringida por asignación. 404 para no revelar existencia de OTs ajenas
+  // (consistente con SEC-20).
+  private static assertMutationScope(
+    order: { mechanicId: string | null },
+    requester: OrderRequester,
+  ): void {
+    if (
+      (requester.role === "MECHANIC" || requester.role === "TRAINEE") &&
+      order.mechanicId !== requester.id
+    ) {
+      throw new NotFoundException("Orden de trabajo no encontrada")
+    }
+  }
 
   async create(dto: CreateOrderDto, userId: string) {
     const year = new Date().getFullYear()
@@ -82,7 +130,9 @@ export class OrdersService {
     }
 
     // Modo offset (panel admin: ?page=N&pageSize=M); el modo cursor de abajo
-    // queda intacto para los consumidores existentes
+    // queda intacto para los consumidores existentes.
+    // PERF-01: los listados omiten la columna escalar `photos` (data-URIs
+    // base64 de varios MB por OT) — el detalle (findOne) las conserva.
     if (page !== undefined || pageSize !== undefined) {
       const size = Math.min(pageSize ?? 10, 100)
       const currentPage = page ?? 1
@@ -92,6 +142,7 @@ export class OrdersService {
         skip: (currentPage - 1) * size,
         orderBy: { receivedAt: "desc" },
         include: ORDER_INCLUDE,
+        omit: { photos: true },
       })
       return { data: pagedOrders, nextCursor: null }
     }
@@ -103,6 +154,7 @@ export class OrdersService {
       orderBy: { id: "asc" },
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       include: ORDER_INCLUDE,
+      omit: { photos: true },
     })
 
     const hasMore = orders.length > limit
@@ -112,7 +164,37 @@ export class OrdersService {
     return { data, nextCursor }
   }
 
-  async findOne(id: string, requester?: { id: string; role: string }) {
+  // FUN-18: listado del portal cliente — SIEMPRE filtrado por el clientId del
+  // JWT (relación Client.accountId), nunca por parámetros del frontend. Una
+  // cuenta CLIENT sin Client enlazado no ve nada (fail-closed).
+  async findAllForClient(clientId: string | null | undefined, filters: OrderFilterDto): Promise<PaginatedResult<unknown>> {
+    if (!clientId) {
+      throw new ForbiddenException({
+        message: "Tu cuenta no está vinculada a un cliente del taller. Contacta al administrador.",
+        code: "CLIENT_NOT_LINKED",
+      })
+    }
+    const { limit = 20, cursor } = filters
+    const take = limit + 1
+    const orders = await this.prisma.workOrder.findMany({
+      where: { clientId },
+      take,
+      orderBy: { id: "asc" },
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      include: {
+        vehicle: true,
+        mechanic: { select: { id: true, name: true } },
+      },
+      omit: { photos: true },
+    })
+
+    const hasMore = orders.length > limit
+    const data = hasMore ? orders.slice(0, limit) : orders
+    const nextCursor = hasMore ? data[data.length - 1].id : null
+    return { data, nextCursor }
+  }
+
+  async findOne(id: string, requester?: OrderRequester) {
     const order = await this.prisma.workOrder.findUnique({
       where: { id },
       include: {
@@ -137,7 +219,12 @@ export class OrdersService {
       const isAssignedMechanic =
         (requester.role === "MECHANIC" || requester.role === "TRAINEE") &&
         order.mechanicId === requester.id
-      const isOwningClient = requester.role === "CLIENT" && order.clientId === requester.id
+      // FUN-18: propiedad del cliente por el claim clientId del JWT (relación
+      // Client.accountId), no por el id de la cuenta.
+      const isOwningClient =
+        requester.role === "CLIENT" &&
+        !!requester.clientId &&
+        order.clientId === requester.clientId
       if (!isAssignedMechanic && !isOwningClient) {
         throw new NotFoundException("Orden de trabajo no encontrada")
       }
@@ -146,9 +233,11 @@ export class OrdersService {
     return order
   }
 
-  async update(id: string, dto: UpdateOrderDto) {
+  async update(id: string, dto: UpdateOrderDto, requester: OrderRequester) {
     const order = await this.prisma.workOrder.findUnique({ where: { id } })
     if (!order) throw new NotFoundException("Orden de trabajo no encontrada")
+    // SEC-23: un mecánico sólo edita diagnóstico/costos de SU OT asignada.
+    OrdersService.assertMutationScope(order, requester)
     if (dto.status && order.status === OrderStatus.CANCELLED) {
       throw new ConflictException("No se puede modificar una orden cancelada")
     }
@@ -176,9 +265,12 @@ export class OrdersService {
     return updated
   }
 
-  async updateStatus(id: string, dto: UpdateStatusDto, userId: string) {
+  async updateStatus(id: string, dto: UpdateStatusDto, requester: OrderRequester) {
+    const userId = requester.id
     const order = await this.prisma.workOrder.findUnique({ where: { id } })
     if (!order) throw new NotFoundException("Orden de trabajo no encontrada")
+    // SEC-23: un mecánico sólo transiciona el estado de SU OT asignada.
+    OrdersService.assertMutationScope(order, requester)
 
     const allowed = VALID_TRANSITIONS[order.status]
     if (!allowed.includes(dto.status)) {
@@ -299,6 +391,20 @@ export class OrdersService {
       throw new ConflictException("No se puede reasignar una orden finalizada o cancelada")
     }
 
+    // FUN-17: el destinatario debe ser una cuenta ACTIVA con rol de taller —
+    // asignar una OT a un OWNER/CLIENT rompería el scope de SEC-23.
+    const mechanic = await this.prisma.account.findUnique({
+      where: { id: mechanicId },
+      select: { role: true, status: true },
+    })
+    if (
+      !mechanic ||
+      mechanic.status !== "ACTIVE" ||
+      !([UserRole.MECHANIC, UserRole.TRAINEE] as UserRole[]).includes(mechanic.role)
+    ) {
+      throw new BadRequestException("El destinatario no es un mecanico activo valido")
+    }
+
     const updated = await this.prisma.workOrder.update({
       where: { id },
       data: { mechanicId },
@@ -326,6 +432,9 @@ export class OrdersService {
         statusHistory: { orderBy: { timestamp: "desc" } },
         events: { orderBy: { createdAt: "desc" } },
       },
+      // PERF-01: la columna escalar `photos` se omite — el mapeo de abajo ya
+      // expone las fotos vía photosRel.
+      omit: { photos: true },
     })
 
     const hasMore = orders.length > limit
@@ -385,42 +494,10 @@ export class OrdersService {
     }
   }
 
-  async addItem(
-    orderId: string,
-    dto: { itemId: string; quantity: number; unitPrice: number },
-    userId: string,
-  ) {
-    const order = await this.prisma.workOrder.findUnique({ where: { id: orderId } })
-    if (!order) throw new NotFoundException("Orden no encontrada")
-    if (["DELIVERED", "CANCELLED"].includes(order.status)) {
-      throw new ConflictException("No se pueden modificar ordenes finalizadas")
-    }
-
-    const item = await this.prisma.inventoryItem.findUnique({ where: { id: dto.itemId } })
-    if (!item) throw new NotFoundException("Item de inventario no encontrado")
-    if (item.stock < dto.quantity) {
-      throw new ConflictException(`Stock insuficiente. Disponible: ${item.stock}, solicitado: ${dto.quantity}`)
-    }
-
-    const [orderPart] = await this.prisma.$transaction([
-      this.prisma.workOrderPart.create({
-        data: { orderId, itemId: dto.itemId, quantity: dto.quantity, unitPrice: dto.unitPrice },
-      }),
-      this.prisma.inventoryMovement.create({
-        data: { itemId: dto.itemId, type: "OUT", quantity: dto.quantity, orderId, authorizedBy: userId, unitCost: item.unitPrice, justification: `Consumo en OT ${order.number}` },
-      }),
-      this.prisma.inventoryItem.update({
-        where: { id: dto.itemId },
-        data: { stock: item.stock - dto.quantity },
-      }),
-      this.prisma.workOrderEvent.create({
-        data: { workOrderId: orderId, event: "PART_ADDED", description: `Repuesto ${item.name} x${dto.quantity} agregado`, userId },
-      }),
-    ])
-
-    this.logger.log(`Item ${item.sku} x${dto.quantity} agregado a OT ${order.number}`)
-    return orderPart
-  }
+  // MNT-09: se eliminaron `addItem` y `requestParts` de este servicio — eran
+  // duplicados muertos (0 call sites) del flujo vivo DispatchPartsToOrderUseCase
+  // (POST /orders/:id/parts), y de reconectarse habrían evadido la política de
+  // asignación SEC-23 y las alertas de bajo stock.
 
   async applyDiscount(
     orderId: string,
@@ -430,6 +507,8 @@ export class OrdersService {
   ) {
     const order = await this.prisma.workOrder.findUnique({ where: { id: orderId } })
     if (!order) throw new NotFoundException("Orden no encontrada")
+    // SEC-23: un mecánico sólo aplica/solicita descuento sobre SU OT asignada.
+    OrdersService.assertMutationScope(order, { id: userId, role: userRole })
     if (["DELIVERED", "CANCELLED"].includes(order.status)) {
       throw new ConflictException("No se puede aplicar descuento a ordenes finalizadas")
     }
@@ -477,9 +556,27 @@ export class OrdersService {
     return updated
   }
 
-  async uploadPhoto(orderId: string, photo: Express.Multer.File, description?: string) {
+  async uploadPhoto(
+    orderId: string,
+    photo: Express.Multer.File,
+    requester: OrderRequester,
+    description?: string,
+  ) {
     const order = await this.prisma.workOrder.findUnique({ where: { id: orderId } })
     if (!order) throw new NotFoundException("Orden de trabajo no encontrada")
+    // SEC-23: un mecánico sólo adjunta evidencia a SU OT asignada.
+    OrdersService.assertMutationScope(order, requester)
+
+    // PERF-01: validación por contenido (magic bytes) + tope de fotos por OT.
+    if (!isImageBuffer(photo.buffer)) {
+      throw new BadRequestException("El archivo no es una imagen válida (JPEG/PNG/WebP)")
+    }
+    const photoCount = await this.prisma.workOrderPhoto.count({ where: { orderId } })
+    if (photoCount >= MAX_PHOTOS_PER_ORDER) {
+      throw new ConflictException(
+        `La OT ya tiene el máximo de ${MAX_PHOTOS_PER_ORDER} fotos permitidas`,
+      )
+    }
 
     const url = `data:${photo.mimetype};base64,${photo.buffer.toString("base64")}`
     const hash = createHash("sha256").update(photo.buffer).digest("hex")
@@ -505,7 +602,8 @@ export class OrdersService {
         description: description
           ? `Foto cargada: ${description}`
           : "Foto del vehiculo cargada al sistema",
-        userId: order.createdBy,
+        // Atribución correcta: quien sube la foto (JWT), no el creador de la OT.
+        userId: requester.id,
       },
     })
 
@@ -513,73 +611,14 @@ export class OrdersService {
     return { success: true, url }
   }
 
-  async requestParts(orderId: string, dto: RequestPartsDto, userId: string, userName: string) {
+  async reportProgress(orderId: string, dto: MechanicProgressDto, requester: OrderRequester, userName: string) {
+    const userId = requester.id
     const order = await this.prisma.workOrder.findUnique({ where: { id: orderId } })
     if (!order) throw new NotFoundException("Orden de trabajo no encontrada")
-    if (order.status !== "IN_PROGRESS") {
-      throw new HttpException(
-        {
-          statusCode: 422,
-          error: "INVENTORY_NO_ACTIVE_ORDER",
-          message: `Solo se puede solicitar repuestos para OT en estado IN_PROGRESS. OT ${order.number} está en estado ${order.status}.`,
-        },
-        HttpStatus.UNPROCESSABLE_ENTITY,
-      )
-    }
-
-    const results = await this.prisma.$transaction(async (tx) => {
-      const created: unknown[] = []
-
-      for (const req of dto.items) {
-        const item = await tx.inventoryItem.findUnique({ where: { id: req.itemId } })
-        if (!item) throw new NotFoundException(`Item de inventario no encontrado: ${req.itemId}`)
-        if (item.stock < req.quantity) {
-          throw new ConflictException(`Stock insuficiente para ${item.name}. Disponible: ${item.stock}, solicitado: ${req.quantity}`)
-        }
-
-        const part = await tx.workOrderPart.create({
-          data: { orderId, itemId: req.itemId, quantity: req.quantity, unitPrice: item.unitPrice },
-        })
-
-        await tx.inventoryMovement.create({
-          data: {
-            itemId: req.itemId,
-            type: "OUT",
-            quantity: req.quantity,
-            orderId,
-            authorizedBy: userId,
-            unitCost: item.costPrice,
-            justification: `Consumo en OT ${order.number}`,
-          },
-        })
-
-        await tx.inventoryItem.update({
-          where: { id: req.itemId },
-          data: { stock: item.stock - req.quantity },
-        })
-
-        await tx.workOrderEvent.create({
-          data: {
-            workOrderId: orderId,
-            event: "PART_REQUESTED",
-            description: `${userName} solicitó repuesto: ${item.name} x${req.quantity} para OT ${order.number}`,
-            userId,
-          },
-        })
-
-        created.push(part)
-      }
-
-      return created
-    })
-
-    this.logger.log(`${dto.items.length} repuesto(s) solicitado(s) para OT ${order.number}`)
-    return { success: true, parts: results }
-  }
-
-  async reportProgress(orderId: string, dto: MechanicProgressDto, userId: string, userName: string) {
-    const order = await this.prisma.workOrder.findUnique({ where: { id: orderId } })
-    if (!order) throw new NotFoundException("Orden de trabajo no encontrada")
+    // SEC-23: el avance (que además incrementa laborCost = horas × tarifa) sólo
+    // puede reportarse sobre la OT asignada — antes un mecánico podía inflar el
+    // costo de mano de obra de CUALQUIER OT por id.
+    OrdersService.assertMutationScope(order, requester)
 
     const desc = dto.notes
       ? `${userName} registró avance técnico: ${dto.notes} (${dto.progressPercent}%)`
@@ -615,9 +654,13 @@ export class OrdersService {
     return { success: true, event }
   }
 
-  async deletePhoto(orderId: string, photoId: string, userId: string, userName: string) {
+  async deletePhoto(orderId: string, photoId: string, requester: OrderRequester, userName: string) {
+    const userId = requester.id
     const order = await this.prisma.workOrder.findUnique({ where: { id: orderId } })
     if (!order) throw new NotFoundException("Orden de trabajo no encontrada")
+    // SEC-23: borrar evidencia fotográfica (anti-fraude #8) de una OT ajena era
+    // posible para cualquier mecánico; ahora sólo sobre su OT asignada.
+    OrdersService.assertMutationScope(order, requester)
 
     const photo = await this.prisma.workOrderPhoto.findFirst({
       where: { id: photoId, orderId },
@@ -659,6 +702,16 @@ export class OrdersService {
         `Regla Anti-Fraude #8: Se requieren ${WorkOrder.REQUIRED_CHECKIN_POSITIONS.length} fotos obligatorias ` +
         `(${WorkOrder.REQUIRED_CHECKIN_POSITIONS.join(", ")}). Recibidas: ${photos.length}`,
       )
+    }
+
+    // PERF-01: validación por contenido real (magic bytes), no por mimetype
+    // declarado — un binario arbitrario renombrado .jpg se rechaza.
+    for (const photo of photos) {
+      if (!isImageBuffer(photo.buffer)) {
+        throw new BadRequestException(
+          "Una de las fotos de check-in no es una imagen válida (JPEG/PNG/WebP)",
+        )
+      }
     }
 
     const suppliedPositions = (body.photoPositions ?? "")
@@ -808,6 +861,16 @@ export class OrdersService {
 
     const mimeType = dto.mimeType ?? "image/jpeg"
     const buffer = Buffer.from(dto.imageBase64, "base64")
+    // PERF-01: contenido real de imagen + tope de fotos por OT.
+    if (!isImageBuffer(buffer)) {
+      throw new BadRequestException("La captura no es una imagen válida (JPEG/PNG/WebP)")
+    }
+    const existingPhotos = await this.prisma.workOrderPhoto.count({ where: { orderId } })
+    if (existingPhotos >= MAX_PHOTOS_PER_ORDER) {
+      throw new ConflictException(
+        `La OT ya tiene el máximo de ${MAX_PHOTOS_PER_ORDER} fotos permitidas`,
+      )
+    }
     const hash = createHash("sha256").update(buffer).digest("hex")
     const url = `data:${mimeType};base64,${dto.imageBase64}`
 
@@ -846,11 +909,13 @@ export class OrdersService {
   // snapshot ONVIF de la camara de bahia configurada (ONVIF_DEFAULT_CAMERA_ID);
   // el bridge reenvia la imagen a captureCameraPhoto para hash+vinculo.
   // Best-effort: si el bridge/camara no responde, no bloquea el check-in.
-  async requestCameraCapture(orderId: string, position: string) {
+  async requestCameraCapture(orderId: string, position: string, requester: OrderRequester) {
     const order = await this.prisma.workOrder.findUnique({ where: { id: orderId } })
     if (!order) {
       throw new NotFoundException("OT no encontrada")
     }
+    // SEC-23: un mecánico sólo dispara capturas ONVIF sobre su OT asignada.
+    OrdersService.assertMutationScope(order, requester)
 
     const pos = position.toUpperCase().trim()
     const allowedPositions = WorkOrder.REQUIRED_CHECKIN_POSITIONS as readonly string[]
