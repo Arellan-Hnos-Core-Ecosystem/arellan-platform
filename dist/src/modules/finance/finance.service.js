@@ -38,15 +38,11 @@ let FinanceService = FinanceService_1 = class FinanceService {
         this.alertQueue = alertQueue;
     }
     async openCashbox(userId, dto) {
-        const todayStart = new Date();
-        todayStart.setHours(0, 0, 0, 0);
-        const todayEnd = new Date();
-        todayEnd.setHours(23, 59, 59, 999);
         const existing = await this.prisma.cashboxSession.findFirst({
-            where: { openedAt: { gte: todayStart, lte: todayEnd }, status: "OPEN" },
+            where: { status: "OPEN" },
         });
         if (existing)
-            throw new common_1.ConflictException("Ya existe una caja abierta hoy");
+            throw new common_1.ConflictException("Ya existe una caja abierta");
         const session = await this.prisma.cashboxSession.create({
             data: { openedById: userId, openingBalance: dto.openingBalance, status: "OPEN" },
             include: { openedBy: { select: { id: true, name: true, role: true } } },
@@ -104,12 +100,8 @@ let FinanceService = FinanceService_1 = class FinanceService {
         return closed;
     }
     async getTodaySession() {
-        const todayStart = new Date();
-        todayStart.setHours(0, 0, 0, 0);
-        const todayEnd = new Date();
-        todayEnd.setHours(23, 59, 59, 999);
         const session = await this.prisma.cashboxSession.findFirst({
-            where: { openedAt: { gte: todayStart, lte: todayEnd }, status: "OPEN" },
+            where: { status: "OPEN" },
             include: {
                 transactions: { orderBy: { createdAt: "desc" } },
                 openedBy: { select: { id: true, name: true, role: true } },
@@ -117,7 +109,13 @@ let FinanceService = FinanceService_1 = class FinanceService {
         });
         if (!session)
             return { open: false, message: "No hay caja abierta hoy" };
-        return { open: true, session };
+        const flat = {
+            ...session,
+            openingBalance: Number(session.openingBalance ?? 0),
+            initialAmount: Number(session.openingBalance ?? 0),
+            openedByName: session.openedBy?.name ?? "N/A",
+        };
+        return { ...flat, open: true, session: flat };
     }
     async addTransaction(sessionId, dto) {
         const session = await this.prisma.cashboxSession.findUnique({ where: { id: sessionId } });
@@ -225,6 +223,44 @@ let FinanceService = FinanceService_1 = class FinanceService {
             this.logger.log(`Gasto ${expenseId} RECHAZADO por ${approverId}`);
             return rejected;
         }
+        if (expense.approvalLevel === client_1.ApprovalLevel.DUAL_OWNER) {
+            if (!expense.approverId) {
+                const partial = await this.prisma.expenseAuthorization.update({
+                    where: { id: expenseId },
+                    data: { approverId },
+                    include: {
+                        requester: { select: { id: true, name: true, role: true } },
+                        approver: { select: { id: true, name: true, role: true } },
+                    },
+                });
+                this.logger.log(`Gasto ${expenseId} (DUAL) primera aprobación por ${approverId}; falta un segundo OWNER distinto`);
+                return {
+                    status: "PARTIAL_APPROVAL",
+                    message: "Primera aprobación registrada. Se requiere la aprobación de un segundo OWNER distinto.",
+                    expense: partial,
+                };
+            }
+            if (expense.approverId === approverId) {
+                throw new common_1.ConflictException("Ya registraste la primera aprobación de este gasto. Se requiere un segundo OWNER distinto.");
+            }
+            await this.prisma.auditLog.create({
+                data: {
+                    userId: approverId,
+                    userName: approver.name,
+                    role: approver.role,
+                    action: "EXPENSE_DUAL_APPROVED",
+                    entity: "ExpenseAuthorization",
+                    entityId: expenseId,
+                    severity: "WARNING",
+                    ipAddress: "system",
+                    metadata: {
+                        firstApproverId: expense.approverId,
+                        secondApproverId: approverId,
+                        amount: Number(expense.amount),
+                    },
+                },
+            });
+        }
         const approved = await this.prisma.expenseAuthorization.update({
             where: { id: expenseId },
             data: {
@@ -246,11 +282,12 @@ let FinanceService = FinanceService_1 = class FinanceService {
         const where = { status: client_1.ExpenseStatus.PENDING_APPROVAL };
         if (approverId)
             where.requesterId = { not: approverId };
-        return this.prisma.expenseAuthorization.findMany({
+        const expenses = await this.prisma.expenseAuthorization.findMany({
             where,
             orderBy: { createdAt: "desc" },
             include: { requester: { select: { id: true, name: true, role: true } } },
         });
+        return expenses.map((e) => ({ ...e, amount: Number(e.amount), requestedBy: e.requester }));
     }
     async getExpenses(filters) {
         const where = {};
@@ -268,7 +305,7 @@ let FinanceService = FinanceService_1 = class FinanceService {
                 where.createdAt.lte = new Date(filters.endDate);
         }
         const page = filters.page || 1;
-        const size = filters.size || 20;
+        const size = filters.pageSize ?? filters.size ?? 20;
         const skip = (page - 1) * size;
         const [data, total] = await Promise.all([
             this.prisma.expenseAuthorization.findMany({
@@ -411,69 +448,6 @@ let FinanceService = FinanceService_1 = class FinanceService {
         const totalIn = inflowTx.reduce((s, t) => s + Number(t.amount), 0);
         const totalOut = outflowTx.reduce((s, t) => s + Number(t.amount), 0);
         return { from: start, to: end, inflows, outflows, totalIn, totalOut, net: totalIn - totalOut };
-    }
-    async approveExpenseWithDualApproval(expenseId, approverId, dto) {
-        const expense = await this.prisma.expenseAuthorization.findUnique({ where: { id: expenseId } });
-        if (!expense)
-            throw new common_1.NotFoundException("Gasto no encontrado");
-        if (expense.status !== client_1.ExpenseStatus.PENDING_APPROVAL)
-            throw new common_1.ConflictException("El gasto ya fue procesado");
-        if (expense.requesterId === approverId) {
-            throw new common_1.ForbiddenException({ message: "No puedes aprobar tus propios gastos", code: "SELF_APPROVAL_FORBIDDEN" });
-        }
-        const approver = await this.prisma.account.findUnique({
-            where: { id: approverId },
-            select: { id: true, role: true, name: true },
-        });
-        if (!approver)
-            throw new common_1.NotFoundException("Aprobador no encontrado");
-        if (!this.canApproveLevel(approver.role, expense.approvalLevel)) {
-            throw new common_1.ForbiddenException({
-                message: `Tu rol no tiene nivel suficiente (requiere ${expense.approvalLevel})`,
-                code: "INSUFFICIENT_APPROVAL_LEVEL",
-            });
-        }
-        if (dto.decision === "REJECTED") {
-            return this.prisma.expenseAuthorization.update({
-                where: { id: expenseId },
-                data: { status: client_1.ExpenseStatus.REJECTED, approverId, rejectionReason: dto.rejectionReason, approvedAt: new Date() },
-                include: {
-                    requester: { select: { id: true, name: true, role: true } },
-                    approver: { select: { id: true, name: true, role: true } },
-                },
-            });
-        }
-        const amount = Number(expense.amount);
-        if (amount > 500) {
-            const metadata = expense.metadata ?? {};
-            const approvers = typeof metadata === "object" && Array.isArray(metadata.approvers) ? metadata.approvers : [];
-            if (approvers.includes(approverId)) {
-                throw new common_1.ConflictException("Ya aprobaste este gasto. Se requiere un segundo OWNER.");
-            }
-            approvers.push(approverId);
-            if (approvers.length < 2) {
-                await this.prisma.expenseAuthorization.update({
-                    where: { id: expenseId },
-                    data: { rejectionReason: JSON.stringify({ ...metadata, approvers }) },
-                });
-                return { status: "PARTIAL_APPROVAL", message: "Primera aprobacion registrada. Se requiere un segundo OWNER." };
-            }
-        }
-        await this.alertQueue.add("expense-disbursed", {
-            type: "EXPENSE_DISBURSED",
-            expenseId,
-            amount: Number(expense.amount),
-            category: expense.category,
-            timestamp: new Date().toISOString(),
-        });
-        return this.prisma.expenseAuthorization.update({
-            where: { id: expenseId },
-            data: { status: client_1.ExpenseStatus.DISBURSED, approverId, approvedAt: new Date(), disbursedAt: new Date(), rejectionReason: null },
-            include: {
-                requester: { select: { id: true, name: true, role: true } },
-                approver: { select: { id: true, name: true, role: true } },
-            },
-        });
     }
     async generatePaymentQR(workOrderId, userId) {
         const order = await this.prisma.workOrder.findUnique({

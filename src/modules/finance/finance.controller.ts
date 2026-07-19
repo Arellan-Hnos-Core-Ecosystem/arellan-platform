@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, Query, UseGuards } from "@nestjs/common"
+import { Controller, Post, Get, Body, Param, Query, UseGuards, BadRequestException } from "@nestjs/common"
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam, ApiQuery } from "@nestjs/swagger"
 import { FinanceService } from "./finance.service"
 import { CloseCashboxSessionUseCase } from "./use-cases/close-cashbox-session.use-case"
@@ -195,19 +195,20 @@ export class FinanceController {
     })
 
     if (!owner?.mfaEnabled || !owner?.mfaSecret) {
-      throw new Error("El OWNER no tiene MFA configurado. Configure Google Authenticator primero.")
+      // SEC-07: excepciones HTTP tipadas (antes `throw new Error` → 500).
+      throw new BadRequestException("El OWNER no tiene MFA configurado. Configure Google Authenticator primero.")
     }
 
     const isValid = authenticator.verify({ token: dto.totpCode, secret: owner.mfaSecret })
     if (!isValid) {
-      throw new Error("Código TOTP inválido o expirado.")
+      throw new BadRequestException("Código TOTP inválido o expirado.")
     }
 
     const session = await this.financeService["prisma"].cashboxSession.findUnique({
       where: { id: dto.sessionId },
     })
     if (!session || session.status !== "BLOCKED") {
-      throw new Error("La sesión de caja no existe o no está en estado BLOCKED.")
+      throw new BadRequestException("La sesión de caja no existe o no está en estado BLOCKED.")
     }
 
     const unblocked = await this.financeService["prisma"].cashboxSession.update({

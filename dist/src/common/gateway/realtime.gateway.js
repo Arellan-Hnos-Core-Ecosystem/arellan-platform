@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var RealtimeGateway_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RealtimeGateway = void 0;
 const websockets_1 = require("@nestjs/websockets");
@@ -18,7 +19,7 @@ const socket_io_1 = require("socket.io");
 const common_1 = require("@nestjs/common");
 const jwt_1 = require("@nestjs/jwt");
 const prisma_service_1 = require("../prisma/prisma.service");
-let RealtimeGateway = class RealtimeGateway {
+let RealtimeGateway = RealtimeGateway_1 = class RealtimeGateway {
     jwtService;
     prisma;
     server;
@@ -107,6 +108,9 @@ let RealtimeGateway = class RealtimeGateway {
             });
         }
     }
+    emitCashboxClosed(data) {
+        this.server.to("dashboard").emit("cashbox:closed", data);
+    }
     emitInventoryLowStock(data) {
         this.server.to("dashboard").emit("inventory:low_stock", data);
     }
@@ -144,57 +148,125 @@ let RealtimeGateway = class RealtimeGateway {
     emitAnomalyDetected(data) {
         this.server.to("dashboard").emit("anomaly:detected", data);
     }
-    handleStatusChange(_client, data) {
-        this.broadcastOrderUpdate(data);
-        return { success: true, eventId: `evt-${Date.now()}` };
+    getSocketUser(client) {
+        const data = client.data;
+        if (!data?.userId || !data?.role)
+            return null;
+        return { userId: String(data.userId), role: String(data.role), email: data.email };
     }
-    handleSubscribe(client, data) {
-        let orderId;
-        if (!data) {
+    static parseId(data, ...keys) {
+        if (typeof data === "string")
+            return data || undefined;
+        if (typeof data === "object" && data !== null) {
+            for (const k of keys) {
+                const v = data[k];
+                if (typeof v === "string" && v)
+                    return v;
+            }
+        }
+        return undefined;
+    }
+    async canAccessOrder(user, orderId) {
+        if (["OWNER", "ADMIN", "FINANCE"].includes(user.role))
+            return true;
+        const order = await this.prisma.workOrder.findUnique({
+            where: { id: orderId },
+            select: { mechanicId: true, clientId: true },
+        });
+        if (!order)
+            return false;
+        if (user.role === "MECHANIC" || user.role === "TRAINEE")
+            return order.mechanicId === user.userId;
+        if (user.role === "CLIENT")
+            return order.clientId === user.userId;
+        return false;
+    }
+    async handleStatusChange(client, data) {
+        const user = this.getSocketUser(client);
+        if (!user)
+            return { success: false, error: "No autenticado" };
+        const orderId = data?.orderId;
+        if (!orderId)
             return { success: false, error: "orderId is required" };
+        if (!(await this.canAccessOrder(user, orderId))) {
+            return { success: false, error: "No autorizado para esta orden" };
         }
-        if (typeof data === "string") {
-            orderId = data;
-        }
-        else if (typeof data === "object" && data !== null) {
-            orderId = data.orderId || data.id;
-        }
-        if (!orderId) {
+        this.server.to(`order:${orderId}`).emit("order:updated", data);
+        return { success: true };
+    }
+    async handleSubscribe(client, data) {
+        const user = this.getSocketUser(client);
+        if (!user)
+            return { success: false, error: "No autenticado" };
+        const orderId = RealtimeGateway_1.parseId(data, "orderId", "id");
+        if (!orderId)
             return { success: false, error: "orderId is required" };
+        if (!(await this.canAccessOrder(user, orderId))) {
+            return { success: false, error: "No autorizado para esta orden" };
         }
         client.join(`order:${orderId}`);
         return { success: true, room: `order:${orderId}` };
     }
     handleUnsubscribe(client, data) {
-        const orderId = typeof data === "string" ? data : data?.orderId || data?.id;
+        const orderId = RealtimeGateway_1.parseId(data, "orderId", "id");
         if (!orderId)
             return { success: false, error: "orderId is required" };
         client.leave(`order:${orderId}`);
         return { success: true };
     }
-    async handleMechanicProgress(_client, data) {
+    async handleMechanicProgress(client, data) {
+        const user = this.getSocketUser(client);
+        if (!user)
+            return { success: false, error: "No autenticado" };
+        if (!["MECHANIC", "TRAINEE", "ADMIN", "OWNER"].includes(user.role)) {
+            return { success: false, error: "No autorizado" };
+        }
+        const orderId = data?.orderId;
+        if (!orderId)
+            return { success: false, error: "orderId is required" };
+        const order = await this.prisma.workOrder.findUnique({
+            where: { id: orderId },
+            select: { id: true, number: true, mechanicId: true },
+        });
+        if (!order)
+            return { success: false, error: "Orden no encontrada" };
+        if ((user.role === "MECHANIC" || user.role === "TRAINEE") && order.mechanicId !== user.userId) {
+            return { success: false, error: "No autorizado para esta orden" };
+        }
+        const account = await this.prisma.account.findUnique({
+            where: { id: user.userId },
+            select: { name: true },
+        });
+        const mechanicName = account?.name ?? user.email ?? "Mecánico";
+        const progressPercent = Math.max(0, Math.min(100, Number(data?.progressPercent) || 0));
+        const partsInstalled = Math.max(0, Math.floor(Number(data?.partsInstalled) || 0));
+        const laborHours = Math.max(0, Number(data?.laborHours) || 0);
+        const notes = typeof data?.notes === "string" ? data.notes.slice(0, 1000) : undefined;
         this.emitMechanicProgress({
-            ...data,
-            timestamp: data.timestamp || new Date().toISOString(),
+            orderId,
+            orderNumber: order.number,
+            mechanicId: user.userId,
+            mechanicName,
+            progressPercent,
+            currentStatus: "IN_PROGRESS",
+            partsInstalled,
+            laborHours,
+            notes,
+            timestamp: new Date().toISOString(),
         });
         try {
             await this.prisma.workOrderEvent.create({
                 data: {
-                    workOrderId: data.orderId,
+                    workOrderId: orderId,
                     event: "PROGRESS_REPORTED",
-                    description: data.notes
-                        ? `${data.mechanicName} registró avance técnico: ${data.notes} (${data.progressPercent}%)`
-                        : `${data.mechanicName} reportó avance del ${data.progressPercent}% - ${data.partsInstalled} repuestos instalados, ${data.laborHours}h trabajadas`,
-                    metadata: {
-                        progressPercent: data.progressPercent,
-                        partsInstalled: data.partsInstalled,
-                        laborHours: data.laborHours,
-                        notes: data.notes ?? null,
-                    },
-                    userId: data.mechanicId,
+                    description: notes
+                        ? `${mechanicName} registró avance técnico: ${notes} (${progressPercent}%)`
+                        : `${mechanicName} reportó avance del ${progressPercent}% - ${partsInstalled} repuestos instalados, ${laborHours}h trabajadas`,
+                    metadata: { progressPercent, partsInstalled, laborHours, notes: notes ?? null },
+                    userId: user.userId,
                 },
             });
-            this.logger.log(`Progreso WS persistido en DB: OT ${data.orderNumber || data.orderId} - ${data.mechanicName}`);
+            this.logger.log(`Progreso WS persistido en DB: OT ${order.number} - ${mechanicName}`);
         }
         catch (e) {
             this.logger.error(`Error al persistir progreso WS: ${e.message}`);
@@ -202,14 +274,21 @@ let RealtimeGateway = class RealtimeGateway {
         return { success: true, eventId: `progress-${Date.now()}` };
     }
     handleClientSubscribe(client, data) {
-        const clientId = typeof data === "string" ? data : data?.clientId || data?.id;
+        const user = this.getSocketUser(client);
+        if (!user)
+            return { success: false, error: "No autenticado" };
+        const clientId = RealtimeGateway_1.parseId(data, "clientId", "id");
         if (!clientId)
             return { success: false, error: "clientId is required" };
+        const isMgmt = ["OWNER", "ADMIN", "FINANCE"].includes(user.role);
+        if (!isMgmt && user.userId !== clientId) {
+            return { success: false, error: "No autorizado para esta sala de cliente" };
+        }
         client.join(`client:${clientId}`);
         return { success: true, room: `client:${clientId}` };
     }
     handleClientUnsubscribe(client, data) {
-        const clientId = typeof data === "string" ? data : data?.clientId || data?.id;
+        const clientId = RealtimeGateway_1.parseId(data, "clientId", "id");
         if (!clientId)
             return { success: false, error: "clientId is required" };
         client.leave(`client:${clientId}`);
@@ -235,7 +314,7 @@ __decorate([
     __param(1, (0, websockets_1.MessageBody)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [socket_io_1.Socket, Object]),
-    __metadata("design:returntype", void 0)
+    __metadata("design:returntype", Promise)
 ], RealtimeGateway.prototype, "handleStatusChange", null);
 __decorate([
     (0, websockets_1.SubscribeMessage)("order:subscribe"),
@@ -243,7 +322,7 @@ __decorate([
     __param(1, (0, websockets_1.MessageBody)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [socket_io_1.Socket, Object]),
-    __metadata("design:returntype", void 0)
+    __metadata("design:returntype", Promise)
 ], RealtimeGateway.prototype, "handleSubscribe", null);
 __decorate([
     (0, websockets_1.SubscribeMessage)("order:unsubscribe"),
@@ -284,7 +363,7 @@ __decorate([
     __metadata("design:paramtypes", [socket_io_1.Socket]),
     __metadata("design:returntype", void 0)
 ], RealtimeGateway.prototype, "handleDashboardSubscribe", null);
-exports.RealtimeGateway = RealtimeGateway = __decorate([
+exports.RealtimeGateway = RealtimeGateway = RealtimeGateway_1 = __decorate([
     (0, common_1.Injectable)(),
     (0, websockets_1.WebSocketGateway)({
         cors: {

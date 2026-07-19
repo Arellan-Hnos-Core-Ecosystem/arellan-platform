@@ -14,6 +14,7 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthController = void 0;
 const common_1 = require("@nestjs/common");
+const throttler_1 = require("@nestjs/throttler");
 const swagger_1 = require("@nestjs/swagger");
 const auth_service_1 = require("./auth.service");
 const auth_dto_1 = require("./dto/auth.dto");
@@ -33,8 +34,8 @@ let AuthController = class AuthController {
         const result = await this.authService.login(dto, ip, userAgent);
         if (!result.mfaPending) {
             res.cookie("arellan-auth", "true", {
-                httpOnly: false,
-                secure: false,
+                httpOnly: true,
+                secure: process.env.NODE_ENV === "production" && process.env.COOKIE_SECURE !== "false",
                 sameSite: "lax",
                 path: "/",
                 maxAge: 7 * 24 * 60 * 60 * 1000,
@@ -47,8 +48,8 @@ let AuthController = class AuthController {
         const userAgent = req.headers?.["user-agent"];
         const result = await this.authService.mechanicLogin(dto.pin, ip, userAgent);
         res.cookie("arellan-auth", "true", {
-            httpOnly: false,
-            secure: false,
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production" && process.env.COOKIE_SECURE !== "false",
             sameSite: "lax",
             path: "/",
             maxAge: 7 * 24 * 60 * 60 * 1000,
@@ -58,8 +59,8 @@ let AuthController = class AuthController {
     async verifyMfa(dto, res) {
         const result = await this.authService.verifyMfa(dto);
         res.cookie("arellan-auth", "true", {
-            httpOnly: false,
-            secure: false,
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production" && process.env.COOKIE_SECURE !== "false",
             sameSite: "lax",
             path: "/",
             maxAge: 7 * 24 * 60 * 60 * 1000,
@@ -106,6 +107,7 @@ let AuthController = class AuthController {
 exports.AuthController = AuthController;
 __decorate([
     (0, common_1.Post)("login"),
+    (0, throttler_1.Throttle)({ default: { limit: 5, ttl: 60000 } }),
     (0, swagger_1.ApiOperation)({
         summary: "Iniciar sesion con email y contrasena",
         description: "Autentica al usuario usando credenciales corporativas. Si MFA esta habilitado, retorna sessionToken para continuar con verificacion TOTP. Bloquea la cuenta tras 5 intentos fallidos durante 15 minutos.",
@@ -124,6 +126,7 @@ __decorate([
 ], AuthController.prototype, "login", null);
 __decorate([
     (0, common_1.Post)("mechanic/login"),
+    (0, throttler_1.Throttle)({ default: { limit: 5, ttl: 60000 } }),
     (0, swagger_1.ApiOperation)({
         summary: "Login rapido para mecanicos via PIN",
         description: "Autentica a mecanicos y practicantes usando su PIN numerico de 6 digitos. Solo valido para roles MECHANIC y TRAINEE con cuenta ACTIVA. Disenado para tablets del taller.",

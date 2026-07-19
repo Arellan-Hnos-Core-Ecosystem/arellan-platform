@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto"
 
 export interface FraudCheckContext {
   userId: string
+  userName?: string
   userRole: string
   ipAddress: string
   method: string
@@ -171,7 +172,7 @@ export class AntiFraudService {
       await this.prisma.auditLog.create({
         data: {
           userId: ctx.userId,
-          userName: ctx.userId,
+          userName: ctx.userName ?? ctx.userId,
           role: ctx.userRole,
           action: `FRAUD_${alert.type}`,
           entity: ctx.entity,

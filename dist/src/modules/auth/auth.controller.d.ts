@@ -11,7 +11,7 @@ export declare class AuthController {
             id: string;
             email: string;
             name: string;
-            role: import(".prisma/client").$Enums.UserRole;
+            role: import("@prisma/client").$Enums.UserRole;
             mfaEnabled: boolean;
         };
     } | {
@@ -26,7 +26,7 @@ export declare class AuthController {
             id: string;
             email: string;
             name: string;
-            role: import(".prisma/client").$Enums.UserRole;
+            role: import("@prisma/client").$Enums.UserRole;
             mfaEnabled: boolean;
         };
     }>;
@@ -37,7 +37,7 @@ export declare class AuthController {
             id: string;
             email: string;
             name: string;
-            role: import(".prisma/client").$Enums.UserRole;
+            role: import("@prisma/client").$Enums.UserRole;
             mfaEnabled: boolean;
         };
     }>;
@@ -45,7 +45,7 @@ export declare class AuthController {
         id: string;
         email: string;
         name: string;
-        role: import(".prisma/client").$Enums.UserRole;
+        role: import("@prisma/client").$Enums.UserRole;
     }>;
     generateMfa(user: AuthUser): Promise<{
         secret: string;
@@ -61,7 +61,7 @@ export declare class AuthController {
             id: string;
             email: string;
             name: string;
-            role: import(".prisma/client").$Enums.UserRole;
+            role: import("@prisma/client").$Enums.UserRole;
             mfaEnabled: boolean;
         };
     }>;
@@ -95,9 +95,9 @@ export declare class AuthController {
         id: string;
         email: string;
         mfaEnabled: boolean;
-        role: import(".prisma/client").$Enums.UserRole;
+        role: import("@prisma/client").$Enums.UserRole;
         name: string;
-        status: import(".prisma/client").$Enums.AccountStatus;
+        status: import("@prisma/client").$Enums.AccountStatus;
         createdAt: Date;
     }>;
 }

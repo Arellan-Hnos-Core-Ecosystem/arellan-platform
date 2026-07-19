@@ -30,6 +30,8 @@ export declare class OrderFilterDto {
     to?: string;
     limit?: number;
     cursor?: string;
+    page?: number;
+    pageSize?: number;
 }
 export interface PaginatedResult<T> {
     data: T[];
@@ -56,6 +58,9 @@ export declare class CameraCaptureDto {
     cameraId: string;
     imageBase64: string;
     mimeType?: string;
+}
+export declare class RequestCameraCaptureDto {
+    position: string;
 }
 export declare class SendQuoteDto {
     laborCost: number;

@@ -434,13 +434,14 @@ async function main() {
     await set("shop_email", "contacto@arellanautos.pe", "BUSINESS");
     await set("shop_ruc", "20408765432", "BUSINESS");
     await set("business_hours", "Lunes a Viernes: 8:00 AM - 6:00 PM | Sábados: 8:00 AM - 1:00 PM", "BUSINESS");
+    await set("attendance_schedule", JSON.stringify({ startTime: "08:00", toleranceMinutes: 60 }), "BUSINESS");
     await set("yape_account_name", "Clínica Automotriz Arellan Hnos", "BUSINESS");
     await set("yape_phone", "987654321", "BUSINESS");
     await set("yape_qr_url", "https://arellanautos.pe/yape-qr.png", "BUSINESS");
     await set("notify_low_stock", "true", "NOTIFICATIONS");
     await set("notify_order_status", "true", "NOTIFICATIONS");
     await set("default_warranty_days", "30", "GENERAL");
-    console.log("  OK 12 configuraciones");
+    console.log("  OK 13 configuraciones");
     console.log("Creando notificaciones...");
     const notCount = await prisma.notification.count();
     if (notCount === 0) {

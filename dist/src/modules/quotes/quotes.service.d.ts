@@ -17,12 +17,12 @@ export declare class QuotesService {
             workOrder: {
                 number: string;
                 id: string;
-                status: import(".prisma/client").$Enums.OrderStatus;
+                status: import("@prisma/client").$Enums.OrderStatus;
             } | null;
         } & {
             number: string;
             id: string;
-            status: import(".prisma/client").$Enums.QuoteStatus;
+            status: import("@prisma/client").$Enums.QuoteStatus;
             createdAt: Date;
             updatedAt: Date;
             notes: string | null;
@@ -32,9 +32,9 @@ export declare class QuotesService {
             rejectionReason: string | null;
             approvedAt: Date | null;
             workOrderId: string | null;
-            total: Prisma.Decimal;
-            subtotal: Prisma.Decimal;
             validUntil: Date;
+            subtotal: Prisma.Decimal;
+            total: Prisma.Decimal;
             rejectedAt: Date | null;
         })[];
         total: number;
@@ -56,7 +56,7 @@ export declare class QuotesService {
             address: string | null;
             notes: string | null;
             ruc: string | null;
-            type: import(".prisma/client").$Enums.ClientType;
+            type: import("@prisma/client").$Enums.ClientType;
             companyName: string | null;
             phone2: string | null;
             district: string | null;
@@ -78,7 +78,7 @@ export declare class QuotesService {
                 createdAt: Date;
                 notes: string | null;
                 description: string;
-                type: import(".prisma/client").$Enums.ItemType;
+                type: import("@prisma/client").$Enums.ItemType;
                 unitPrice: Prisma.Decimal;
                 discount: Prisma.Decimal;
                 workOrderId: string;
@@ -88,7 +88,7 @@ export declare class QuotesService {
             })[];
             vehicle: {
                 id: string;
-                status: import(".prisma/client").$Enums.VehicleStatus;
+                status: import("@prisma/client").$Enums.VehicleStatus;
                 createdAt: Date;
                 updatedAt: Date;
                 notes: string | null;
@@ -98,27 +98,27 @@ export declare class QuotesService {
                 year: number;
                 color: string | null;
                 vin: string | null;
-                engineType: import(".prisma/client").$Enums.EngineType;
+                engineType: import("@prisma/client").$Enums.EngineType;
                 engineCC: number | null;
                 mileage: number | null;
-                fuelType: import(".prisma/client").$Enums.FuelType;
-                transmission: import(".prisma/client").$Enums.TransmissionType;
+                fuelType: import("@prisma/client").$Enums.FuelType;
+                transmission: import("@prisma/client").$Enums.TransmissionType;
                 clientId: string;
                 photos: string[];
             };
         } & {
             number: string;
             id: string;
-            status: import(".prisma/client").$Enums.OrderStatus;
+            status: import("@prisma/client").$Enums.OrderStatus;
             createdAt: Date;
             updatedAt: Date;
             description: string;
-            type: import(".prisma/client").$Enums.ServiceType;
+            type: import("@prisma/client").$Enums.ServiceType;
             clientId: string;
             photos: string[];
             vehicleId: string;
             mechanicId: string | null;
-            priority: import(".prisma/client").$Enums.Priority;
+            priority: import("@prisma/client").$Enums.Priority;
             diagnosis: string | null;
             recommendation: string | null;
             odometerIn: number | null;
@@ -135,7 +135,7 @@ export declare class QuotesService {
             startedAt: Date | null;
             completedAt: Date | null;
             deliveredAt: Date | null;
-            paymentStatus: import(".prisma/client").$Enums.InvoiceStatus;
+            paymentStatus: import("@prisma/client").$Enums.InvoiceStatus;
             customerNotes: string | null;
             internalNotes: string | null;
             signature: string | null;
@@ -148,7 +148,7 @@ export declare class QuotesService {
     } & {
         number: string;
         id: string;
-        status: import(".prisma/client").$Enums.QuoteStatus;
+        status: import("@prisma/client").$Enums.QuoteStatus;
         createdAt: Date;
         updatedAt: Date;
         notes: string | null;
@@ -158,9 +158,9 @@ export declare class QuotesService {
         rejectionReason: string | null;
         approvedAt: Date | null;
         workOrderId: string | null;
-        total: Prisma.Decimal;
-        subtotal: Prisma.Decimal;
         validUntil: Date;
+        subtotal: Prisma.Decimal;
+        total: Prisma.Decimal;
         rejectedAt: Date | null;
     }>;
     create(dto: CreateQuoteDto, userId: string): Promise<{
@@ -177,7 +177,7 @@ export declare class QuotesService {
     } & {
         number: string;
         id: string;
-        status: import(".prisma/client").$Enums.QuoteStatus;
+        status: import("@prisma/client").$Enums.QuoteStatus;
         createdAt: Date;
         updatedAt: Date;
         notes: string | null;
@@ -187,15 +187,15 @@ export declare class QuotesService {
         rejectionReason: string | null;
         approvedAt: Date | null;
         workOrderId: string | null;
-        total: Prisma.Decimal;
-        subtotal: Prisma.Decimal;
         validUntil: Date;
+        subtotal: Prisma.Decimal;
+        total: Prisma.Decimal;
         rejectedAt: Date | null;
     }>;
     approve(id: string): Promise<{
         number: string;
         id: string;
-        status: import(".prisma/client").$Enums.QuoteStatus;
+        status: import("@prisma/client").$Enums.QuoteStatus;
         createdAt: Date;
         updatedAt: Date;
         notes: string | null;
@@ -205,15 +205,15 @@ export declare class QuotesService {
         rejectionReason: string | null;
         approvedAt: Date | null;
         workOrderId: string | null;
-        total: Prisma.Decimal;
-        subtotal: Prisma.Decimal;
         validUntil: Date;
+        subtotal: Prisma.Decimal;
+        total: Prisma.Decimal;
         rejectedAt: Date | null;
     }>;
     reject(id: string, reason: string): Promise<{
         number: string;
         id: string;
-        status: import(".prisma/client").$Enums.QuoteStatus;
+        status: import("@prisma/client").$Enums.QuoteStatus;
         createdAt: Date;
         updatedAt: Date;
         notes: string | null;
@@ -223,15 +223,15 @@ export declare class QuotesService {
         rejectionReason: string | null;
         approvedAt: Date | null;
         workOrderId: string | null;
-        total: Prisma.Decimal;
-        subtotal: Prisma.Decimal;
         validUntil: Date;
+        subtotal: Prisma.Decimal;
+        total: Prisma.Decimal;
         rejectedAt: Date | null;
     }>;
     convertToOrder(id: string, userId: string): Promise<{
         number: string;
         id: string;
-        status: import(".prisma/client").$Enums.QuoteStatus;
+        status: import("@prisma/client").$Enums.QuoteStatus;
         createdAt: Date;
         updatedAt: Date;
         notes: string | null;
@@ -241,9 +241,9 @@ export declare class QuotesService {
         rejectionReason: string | null;
         approvedAt: Date | null;
         workOrderId: string | null;
-        total: Prisma.Decimal;
-        subtotal: Prisma.Decimal;
         validUntil: Date;
+        subtotal: Prisma.Decimal;
+        total: Prisma.Decimal;
         rejectedAt: Date | null;
     }>;
 }

@@ -19,9 +19,9 @@ export declare class DispatchPartsToOrderUseCase {
             id: string;
             createdAt: Date;
             unitPrice: import("@prisma/client/runtime/library").Decimal;
+            orderId: string;
             itemId: string;
             quantity: number;
-            orderId: string;
         }[];
         lowStockAlerts: number;
     }>;

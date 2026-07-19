@@ -9,11 +9,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AntiFraudModule = void 0;
 const common_1 = require("@nestjs/common");
 const anti_fraud_service_1 = require("./anti-fraud.service");
-const anti_fraud_middleware_1 = require("./anti-fraud.middleware");
 let AntiFraudModule = class AntiFraudModule {
-    configure(consumer) {
-        consumer.apply(anti_fraud_middleware_1.AntiFraudMiddleware).forRoutes({ path: "/api/v1/*path", method: common_1.RequestMethod.ALL });
-    }
 };
 exports.AntiFraudModule = AntiFraudModule;
 exports.AntiFraudModule = AntiFraudModule = __decorate([

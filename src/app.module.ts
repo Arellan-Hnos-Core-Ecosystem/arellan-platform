@@ -34,6 +34,7 @@ import { DashboardModule } from "./modules/dashboard/dashboard.module"
 import { AnalyticsModule } from "./modules/analytics/analytics.module"
 import { AuditInterceptor } from "./common/interceptors/audit.interceptor"
 import { DataMaskingInterceptor } from "./common/interceptors/data-masking.interceptor"
+import { AntiFraudInterceptor } from "./common/anti-fraud/anti-fraud.interceptor"
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -71,6 +72,8 @@ import { DataMaskingInterceptor } from "./common/interceptors/data-masking.inter
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // SEC-01: interceptor anti-fraude global (corre tras la autenticación).
+    { provide: APP_INTERCEPTOR, useClass: AntiFraudInterceptor },
     { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
     { provide: APP_INTERCEPTOR, useClass: DataMaskingInterceptor },
   ],

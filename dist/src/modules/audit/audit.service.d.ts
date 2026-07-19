@@ -12,10 +12,13 @@ interface AuditFilters {
     userId?: string;
     action?: string;
     entity?: string;
+    entityId?: string;
     from?: string;
     to?: string;
     limit?: number;
     cursor?: string;
+    page?: number;
+    pageSize?: number;
 }
 export declare class AuditService {
     private readonly prisma;
@@ -36,7 +39,7 @@ export declare class AuditService {
         ipAddress: string;
         userAgent: string | null;
         metadata: import("@prisma/client/runtime/library").JsonValue | null;
-        severity: import(".prisma/client").$Enums.AuditSeverity;
+        severity: import("@prisma/client").$Enums.AuditSeverity;
         userId: string;
     }>;
     getByUser(userId: string, limit?: number, cursor?: string): Promise<PaginatedResult<any>>;

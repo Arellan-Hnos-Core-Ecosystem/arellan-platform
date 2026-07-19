@@ -14,10 +14,10 @@ export declare class InventoryController {
         } & {
             id: string;
             createdAt: Date;
-            type: import(".prisma/client").$Enums.MovementType;
+            type: import("@prisma/client").$Enums.MovementType;
+            orderId: string | null;
             itemId: string;
             quantity: number;
-            orderId: string | null;
             authorizedBy: string;
             justification: string | null;
             unitCost: import("@prisma/client/runtime/library").Decimal | null;
@@ -28,7 +28,7 @@ export declare class InventoryController {
     getCriticalStock(): Promise<any>;
     getLowStock(): Promise<any>;
     getValuation(): Promise<any>;
-    findAll(category?: string, lowStock?: string, limit?: string, cursor?: string): Promise<any>;
+    findAll(category?: string, lowStock?: string, limit?: string, cursor?: string, search?: string, page?: string, pageSize?: string): Promise<any>;
     findOne(id: string): Promise<any>;
     create(dto: CreateItemDto): Promise<{
         id: string;
@@ -79,10 +79,10 @@ export declare class InventoryController {
     addMovement(user: AuthUser, id: string, dto: InventoryMovementDto): Promise<{
         id: string;
         createdAt: Date;
-        type: import(".prisma/client").$Enums.MovementType;
+        type: import("@prisma/client").$Enums.MovementType;
+        orderId: string | null;
         itemId: string;
         quantity: number;
-        orderId: string | null;
         authorizedBy: string;
         justification: string | null;
         unitCost: import("@prisma/client/runtime/library").Decimal | null;
@@ -91,10 +91,10 @@ export declare class InventoryController {
         data: {
             id: string;
             createdAt: Date;
-            type: import(".prisma/client").$Enums.MovementType;
+            type: import("@prisma/client").$Enums.MovementType;
+            orderId: string | null;
             itemId: string;
             quantity: number;
-            orderId: string | null;
             authorizedBy: string;
             justification: string | null;
             unitCost: import("@prisma/client/runtime/library").Decimal | null;

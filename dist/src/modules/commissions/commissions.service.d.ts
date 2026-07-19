@@ -23,7 +23,7 @@ export declare class CommissionsService {
             } | null;
         } & {
             id: string;
-            status: import(".prisma/client").$Enums.ApprovalStatus;
+            status: import("@prisma/client").$Enums.ApprovalStatus;
             createdAt: Date;
             notes: string | null;
             type: string;
@@ -51,7 +51,7 @@ export declare class CommissionsService {
         } | null;
     } & {
         id: string;
-        status: import(".prisma/client").$Enums.ApprovalStatus;
+        status: import("@prisma/client").$Enums.ApprovalStatus;
         createdAt: Date;
         notes: string | null;
         type: string;
@@ -70,7 +70,7 @@ export declare class CommissionsService {
         };
     } & {
         id: string;
-        status: import(".prisma/client").$Enums.ApprovalStatus;
+        status: import("@prisma/client").$Enums.ApprovalStatus;
         createdAt: Date;
         notes: string | null;
         type: string;
@@ -89,7 +89,7 @@ export declare class CommissionsService {
         };
     } & {
         id: string;
-        status: import(".prisma/client").$Enums.ApprovalStatus;
+        status: import("@prisma/client").$Enums.ApprovalStatus;
         createdAt: Date;
         notes: string | null;
         type: string;
@@ -111,7 +111,7 @@ export declare class CommissionsService {
         } | null;
     } & {
         id: string;
-        status: import(".prisma/client").$Enums.ApprovalStatus;
+        status: import("@prisma/client").$Enums.ApprovalStatus;
         createdAt: Date;
         notes: string | null;
         type: string;
@@ -130,7 +130,7 @@ export declare class CommissionsService {
         };
     } & {
         id: string;
-        status: import(".prisma/client").$Enums.ApprovalStatus;
+        status: import("@prisma/client").$Enums.ApprovalStatus;
         createdAt: Date;
         notes: string | null;
         type: string;

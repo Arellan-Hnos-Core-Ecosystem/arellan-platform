@@ -7,7 +7,8 @@ export declare class InventoryService {
     private readonly redis;
     private readonly logger;
     constructor(prisma: PrismaService, redis: RedisService);
-    findAll(category?: string, lowStock?: boolean, limit?: number, cursor?: string): Promise<any>;
+    findAll(category?: string, lowStock?: boolean, limit?: number, cursor?: string, search?: string, page?: number, pageSize?: number): Promise<any>;
+    private flattenItem;
     private findAllLowStock;
     findOne(id: string): Promise<any>;
     create(dto: CreateItemDto): Promise<{
@@ -59,10 +60,10 @@ export declare class InventoryService {
     addMovement(authorizedBy: string, itemId: string, dto: InventoryMovementDto): Promise<{
         id: string;
         createdAt: Date;
-        type: import(".prisma/client").$Enums.MovementType;
+        type: import("@prisma/client").$Enums.MovementType;
+        orderId: string | null;
         itemId: string;
         quantity: number;
-        orderId: string | null;
         authorizedBy: string;
         justification: string | null;
         unitCost: Prisma.Decimal | null;
@@ -71,10 +72,10 @@ export declare class InventoryService {
         data: {
             id: string;
             createdAt: Date;
-            type: import(".prisma/client").$Enums.MovementType;
+            type: import("@prisma/client").$Enums.MovementType;
+            orderId: string | null;
             itemId: string;
             quantity: number;
-            orderId: string | null;
             authorizedBy: string;
             justification: string | null;
             unitCost: Prisma.Decimal | null;
@@ -92,10 +93,10 @@ export declare class InventoryService {
         } & {
             id: string;
             createdAt: Date;
-            type: import(".prisma/client").$Enums.MovementType;
+            type: import("@prisma/client").$Enums.MovementType;
+            orderId: string | null;
             itemId: string;
             quantity: number;
-            orderId: string | null;
             authorizedBy: string;
             justification: string | null;
             unitCost: Prisma.Decimal | null;
@@ -110,4 +111,5 @@ export declare class InventoryService {
         remainingStock: number;
     }>;
     private invalidateCatalogCache;
+    private invalidateByPattern;
 }

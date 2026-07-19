@@ -21,7 +21,8 @@ let PersonnelService = PersonnelService_1 = class PersonnelService {
         this.prisma = prisma;
     }
     async findAll(filters) {
-        const { role, status, search, page = 1, limit = 20 } = filters;
+        const { role, status, search, page = 1 } = filters;
+        const limit = filters.pageSize ?? filters.limit ?? 20;
         const skip = (page - 1) * limit;
         const take = limit;
         const where = {};

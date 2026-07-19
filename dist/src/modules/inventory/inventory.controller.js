@@ -39,8 +39,8 @@ let InventoryController = class InventoryController {
     getValuation() {
         return this.inventoryService.getValuation();
     }
-    findAll(category, lowStock, limit, cursor) {
-        return this.inventoryService.findAll(category, lowStock === "true", limit ? parseInt(limit, 10) : undefined, cursor);
+    findAll(category, lowStock, limit, cursor, search, page, pageSize) {
+        return this.inventoryService.findAll(category, lowStock === "true", limit ? parseInt(limit, 10) : undefined, cursor, search, page ? parseInt(page, 10) : undefined, pageSize ? parseInt(pageSize, 10) : undefined);
     }
     findOne(id) {
         return this.inventoryService.findOne(id);
@@ -114,13 +114,19 @@ __decorate([
     (0, swagger_1.ApiQuery)({ name: "lowStock", description: "Solo items con stock bajo (true/false)", required: false, example: "false" }),
     (0, swagger_1.ApiQuery)({ name: "limit", description: "Resultados por pagina", required: false }),
     (0, swagger_1.ApiQuery)({ name: "cursor", description: "Cursor de paginacion", required: false }),
+    (0, swagger_1.ApiQuery)({ name: "search", description: "Busqueda insensible por nombre o SKU", required: false, example: "Faro" }),
+    (0, swagger_1.ApiQuery)({ name: "page", description: "Numero de pagina (modo offset)", required: false }),
+    (0, swagger_1.ApiQuery)({ name: "pageSize", description: "Resultados por pagina (modo offset)", required: false }),
     (0, swagger_1.ApiResponse)({ status: 200, description: "Catalogo de inventario paginado" }),
     __param(0, (0, common_1.Query)("category")),
     __param(1, (0, common_1.Query)("lowStock")),
     __param(2, (0, common_1.Query)("limit")),
     __param(3, (0, common_1.Query)("cursor")),
+    __param(4, (0, common_1.Query)("search")),
+    __param(5, (0, common_1.Query)("page")),
+    __param(6, (0, common_1.Query)("pageSize")),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String, String, String]),
+    __metadata("design:paramtypes", [String, String, String, String, String, String, String]),
     __metadata("design:returntype", void 0)
 ], InventoryController.prototype, "findAll", null);
 __decorate([

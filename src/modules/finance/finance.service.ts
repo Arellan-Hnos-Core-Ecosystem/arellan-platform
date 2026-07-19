@@ -266,6 +266,53 @@ export class FinanceService {
       return rejected
     }
 
+    // FUN-01: los gastos > S/2000 (nivel DUAL_OWNER) requieren DOS OWNER
+    // DISTINTOS. Antes, `approveExpense` permitía que un solo OWNER los
+    // aprobara (la lógica dual vivía en un método no cableado). Se consolida
+    // aquí, registrando al primer OWNER en `approverId` mientras el gasto
+    // permanece PENDING_APPROVAL hasta la segunda aprobación de otro OWNER.
+    if (expense.approvalLevel === ApprovalLevel.DUAL_OWNER) {
+      if (!expense.approverId) {
+        const partial = await this.prisma.expenseAuthorization.update({
+          where: { id: expenseId },
+          data: { approverId }, // permanece PENDING_APPROVAL
+          include: {
+            requester: { select: { id: true, name: true, role: true } },
+            approver: { select: { id: true, name: true, role: true } },
+          },
+        })
+        this.logger.log(`Gasto ${expenseId} (DUAL) primera aprobación por ${approverId}; falta un segundo OWNER distinto`)
+        return {
+          status: "PARTIAL_APPROVAL",
+          message: "Primera aprobación registrada. Se requiere la aprobación de un segundo OWNER distinto.",
+          expense: partial,
+        }
+      }
+      if (expense.approverId === approverId) {
+        throw new ConflictException(
+          "Ya registraste la primera aprobación de este gasto. Se requiere un segundo OWNER distinto.",
+        )
+      }
+      // Segundo OWNER distinto: se deja constancia de la doble firma en auditoría.
+      await this.prisma.auditLog.create({
+        data: {
+          userId: approverId,
+          userName: approver.name,
+          role: approver.role,
+          action: "EXPENSE_DUAL_APPROVED",
+          entity: "ExpenseAuthorization",
+          entityId: expenseId,
+          severity: "WARNING",
+          ipAddress: "system",
+          metadata: {
+            firstApproverId: expense.approverId,
+            secondApproverId: approverId,
+            amount: Number(expense.amount),
+          } as any,
+        },
+      })
+    }
+
     const approved = await this.prisma.expenseAuthorization.update({
       where: { id: expenseId },
       data: {
@@ -473,78 +520,6 @@ export class FinanceService {
     const totalOut = outflowTx.reduce((s, t) => s + Number(t.amount), 0)
 
     return { from: start, to: end, inflows, outflows, totalIn, totalOut, net: totalIn - totalOut }
-  }
-
-  async approveExpenseWithDualApproval(
-    expenseId: string,
-    approverId: string,
-    dto: ApproveExpenseDto,
-  ) {
-    const expense = await this.prisma.expenseAuthorization.findUnique({ where: { id: expenseId } })
-    if (!expense) throw new NotFoundException("Gasto no encontrado")
-    if (expense.status !== ExpenseStatus.PENDING_APPROVAL) throw new ConflictException("El gasto ya fue procesado")
-    if (expense.requesterId === approverId) {
-      throw new ForbiddenException({ message: "No puedes aprobar tus propios gastos", code: "SELF_APPROVAL_FORBIDDEN" })
-    }
-
-    const approver = await this.prisma.account.findUnique({
-      where: { id: approverId },
-      select: { id: true, role: true, name: true },
-    })
-    if (!approver) throw new NotFoundException("Aprobador no encontrado")
-    if (!this.canApproveLevel(approver.role, expense.approvalLevel)) {
-      throw new ForbiddenException({
-        message: `Tu rol no tiene nivel suficiente (requiere ${expense.approvalLevel})`,
-        code: "INSUFFICIENT_APPROVAL_LEVEL",
-      })
-    }
-
-    if (dto.decision === "REJECTED") {
-      return this.prisma.expenseAuthorization.update({
-        where: { id: expenseId },
-        data: { status: ExpenseStatus.REJECTED, approverId, rejectionReason: dto.rejectionReason, approvedAt: new Date() },
-        include: {
-          requester: { select: { id: true, name: true, role: true } },
-          approver: { select: { id: true, name: true, role: true } },
-        },
-      })
-    }
-
-    const amount = Number(expense.amount)
-    if (amount > 500) {
-      const metadata: { approvers?: string[] } = expense.rejectionReason ? JSON.parse(expense.rejectionReason) : {}
-      const approvers: string[] = Array.isArray(metadata.approvers) ? metadata.approvers : []
-
-      if (approvers.includes(approverId)) {
-        throw new ConflictException("Ya aprobaste este gasto. Se requiere un segundo OWNER.")
-      }
-
-      approvers.push(approverId)
-      if (approvers.length < 2) {
-        await this.prisma.expenseAuthorization.update({
-          where: { id: expenseId },
-          data: { rejectionReason: JSON.stringify({ ...metadata, approvers }) },
-        })
-        return { status: "PARTIAL_APPROVAL", message: "Primera aprobacion registrada. Se requiere un segundo OWNER." }
-      }
-    }
-
-    await this.alertQueue.add("expense-disbursed", {
-      type: "EXPENSE_DISBURSED",
-      expenseId,
-      amount: Number(expense.amount),
-      category: expense.category,
-      timestamp: new Date().toISOString(),
-    })
-
-    return this.prisma.expenseAuthorization.update({
-      where: { id: expenseId },
-      data: { status: ExpenseStatus.DISBURSED, approverId, approvedAt: new Date(), disbursedAt: new Date(), rejectionReason: null },
-      include: {
-        requester: { select: { id: true, name: true, role: true } },
-        approver: { select: { id: true, name: true, role: true } },
-      },
-    })
   }
 
   async generatePaymentQR(workOrderId: string, userId: string) {

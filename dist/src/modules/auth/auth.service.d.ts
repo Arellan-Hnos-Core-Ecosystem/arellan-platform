@@ -25,7 +25,7 @@ export declare class AuthService {
             id: string;
             email: string;
             name: string;
-            role: import(".prisma/client").$Enums.UserRole;
+            role: import("@prisma/client").$Enums.UserRole;
             mfaEnabled: boolean;
         };
     } | {
@@ -40,7 +40,7 @@ export declare class AuthService {
             id: string;
             email: string;
             name: string;
-            role: import(".prisma/client").$Enums.UserRole;
+            role: import("@prisma/client").$Enums.UserRole;
             mfaEnabled: boolean;
         };
     }>;
@@ -51,7 +51,7 @@ export declare class AuthService {
             id: string;
             email: string;
             name: string;
-            role: import(".prisma/client").$Enums.UserRole;
+            role: import("@prisma/client").$Enums.UserRole;
             mfaEnabled: boolean;
         };
     }>;
@@ -66,7 +66,7 @@ export declare class AuthService {
         id: string;
         email: string;
         name: string;
-        role: import(".prisma/client").$Enums.UserRole;
+        role: import("@prisma/client").$Enums.UserRole;
     }>;
     changePassword(userId: string, dto: ChangePasswordDto): Promise<{
         message: string;
@@ -78,7 +78,7 @@ export declare class AuthService {
             id: string;
             email: string;
             name: string;
-            role: import(".prisma/client").$Enums.UserRole;
+            role: import("@prisma/client").$Enums.UserRole;
             mfaEnabled: boolean;
         };
     }>;
@@ -92,9 +92,9 @@ export declare class AuthService {
         id: string;
         email: string;
         mfaEnabled: boolean;
-        role: import(".prisma/client").$Enums.UserRole;
+        role: import("@prisma/client").$Enums.UserRole;
         name: string;
-        status: import(".prisma/client").$Enums.AccountStatus;
+        status: import("@prisma/client").$Enums.AccountStatus;
         createdAt: Date;
     }>;
     storeSession(accountId: string, token: string): Promise<void>;
@@ -131,11 +131,11 @@ export declare class AuthService {
             address: string | null;
             birthDate: Date | null;
             nationality: string;
-            contractType: import(".prisma/client").$Enums.ContractType;
+            contractType: import("@prisma/client").$Enums.ContractType;
             position: string;
             department: string | null;
             salary: import("@prisma/client/runtime/library").Decimal;
-            salaryType: import(".prisma/client").$Enums.SalaryType;
+            salaryType: import("@prisma/client").$Enums.SalaryType;
             startDate: Date;
             endDate: Date | null;
             photo: string | null;
@@ -148,9 +148,9 @@ export declare class AuthService {
         passwordHash: string;
         mfaSecret: string | null;
         mfaEnabled: boolean;
-        role: import(".prisma/client").$Enums.UserRole;
+        role: import("@prisma/client").$Enums.UserRole;
         name: string;
-        status: import(".prisma/client").$Enums.AccountStatus;
+        status: import("@prisma/client").$Enums.AccountStatus;
         lastLoginAt: Date | null;
         lastLoginIp: string | null;
         failedAttempts: number;

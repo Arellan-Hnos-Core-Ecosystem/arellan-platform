@@ -18,7 +18,7 @@ export declare class PurchasesController {
         } & {
             number: string;
             id: string;
-            status: import(".prisma/client").$Enums.PurchaseStatus;
+            status: import("@prisma/client").$Enums.PurchaseStatus;
             createdAt: Date;
             updatedAt: Date;
             notes: string | null;
@@ -29,8 +29,8 @@ export declare class PurchasesController {
             createdBy: string;
             currency: string;
             approvedBy: string | null;
-            total: import("@prisma/client/runtime/library").Decimal;
             subtotal: import("@prisma/client/runtime/library").Decimal;
+            total: import("@prisma/client/runtime/library").Decimal;
             shipping: import("@prisma/client/runtime/library").Decimal;
             customs: import("@prisma/client/runtime/library").Decimal;
             expectedAt: Date | null;
@@ -55,7 +55,7 @@ export declare class PurchasesController {
     } & {
         number: string;
         id: string;
-        status: import(".prisma/client").$Enums.PurchaseStatus;
+        status: import("@prisma/client").$Enums.PurchaseStatus;
         createdAt: Date;
         updatedAt: Date;
         notes: string | null;
@@ -66,8 +66,8 @@ export declare class PurchasesController {
         createdBy: string;
         currency: string;
         approvedBy: string | null;
-        total: import("@prisma/client/runtime/library").Decimal;
         subtotal: import("@prisma/client/runtime/library").Decimal;
+        total: import("@prisma/client/runtime/library").Decimal;
         shipping: import("@prisma/client/runtime/library").Decimal;
         customs: import("@prisma/client/runtime/library").Decimal;
         expectedAt: Date | null;
@@ -83,7 +83,7 @@ export declare class PurchasesController {
     } & {
         number: string;
         id: string;
-        status: import(".prisma/client").$Enums.PurchaseStatus;
+        status: import("@prisma/client").$Enums.PurchaseStatus;
         createdAt: Date;
         updatedAt: Date;
         notes: string | null;
@@ -94,8 +94,8 @@ export declare class PurchasesController {
         createdBy: string;
         currency: string;
         approvedBy: string | null;
-        total: import("@prisma/client/runtime/library").Decimal;
         subtotal: import("@prisma/client/runtime/library").Decimal;
+        total: import("@prisma/client/runtime/library").Decimal;
         shipping: import("@prisma/client/runtime/library").Decimal;
         customs: import("@prisma/client/runtime/library").Decimal;
         expectedAt: Date | null;
@@ -113,7 +113,7 @@ export declare class PurchasesController {
             };
         } & {
             id: string;
-            status: import(".prisma/client").$Enums.ApprovalStatus;
+            status: import("@prisma/client").$Enums.ApprovalStatus;
             createdAt: Date;
             notes: string | null;
             type: string;
@@ -161,7 +161,7 @@ export declare class PurchasesController {
     } & {
         number: string;
         id: string;
-        status: import(".prisma/client").$Enums.PurchaseStatus;
+        status: import("@prisma/client").$Enums.PurchaseStatus;
         createdAt: Date;
         updatedAt: Date;
         notes: string | null;
@@ -172,8 +172,8 @@ export declare class PurchasesController {
         createdBy: string;
         currency: string;
         approvedBy: string | null;
-        total: import("@prisma/client/runtime/library").Decimal;
         subtotal: import("@prisma/client/runtime/library").Decimal;
+        total: import("@prisma/client/runtime/library").Decimal;
         shipping: import("@prisma/client/runtime/library").Decimal;
         customs: import("@prisma/client/runtime/library").Decimal;
         expectedAt: Date | null;
@@ -206,7 +206,7 @@ export declare class PurchasesController {
     } & {
         number: string;
         id: string;
-        status: import(".prisma/client").$Enums.PurchaseStatus;
+        status: import("@prisma/client").$Enums.PurchaseStatus;
         createdAt: Date;
         updatedAt: Date;
         notes: string | null;
@@ -217,8 +217,8 @@ export declare class PurchasesController {
         createdBy: string;
         currency: string;
         approvedBy: string | null;
-        total: import("@prisma/client/runtime/library").Decimal;
         subtotal: import("@prisma/client/runtime/library").Decimal;
+        total: import("@prisma/client/runtime/library").Decimal;
         shipping: import("@prisma/client/runtime/library").Decimal;
         customs: import("@prisma/client/runtime/library").Decimal;
         expectedAt: Date | null;
@@ -245,7 +245,7 @@ export declare class PurchasesController {
     } & {
         number: string;
         id: string;
-        status: import(".prisma/client").$Enums.PurchaseStatus;
+        status: import("@prisma/client").$Enums.PurchaseStatus;
         createdAt: Date;
         updatedAt: Date;
         notes: string | null;
@@ -256,8 +256,8 @@ export declare class PurchasesController {
         createdBy: string;
         currency: string;
         approvedBy: string | null;
-        total: import("@prisma/client/runtime/library").Decimal;
         subtotal: import("@prisma/client/runtime/library").Decimal;
+        total: import("@prisma/client/runtime/library").Decimal;
         shipping: import("@prisma/client/runtime/library").Decimal;
         customs: import("@prisma/client/runtime/library").Decimal;
         expectedAt: Date | null;
@@ -287,7 +287,7 @@ export declare class PurchasesController {
     } & {
         number: string;
         id: string;
-        status: import(".prisma/client").$Enums.PurchaseStatus;
+        status: import("@prisma/client").$Enums.PurchaseStatus;
         createdAt: Date;
         updatedAt: Date;
         notes: string | null;
@@ -298,8 +298,8 @@ export declare class PurchasesController {
         createdBy: string;
         currency: string;
         approvedBy: string | null;
-        total: import("@prisma/client/runtime/library").Decimal;
         subtotal: import("@prisma/client/runtime/library").Decimal;
+        total: import("@prisma/client/runtime/library").Decimal;
         shipping: import("@prisma/client/runtime/library").Decimal;
         customs: import("@prisma/client/runtime/library").Decimal;
         expectedAt: Date | null;

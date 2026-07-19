@@ -9,11 +9,24 @@ import { AppModule } from "./app.module"
 import { HttpExceptionFilter } from "./common/filters/http-exception.filter"
 
 async function bootstrap() {
+  // SEC-14: reloj de negocio en zona horaria de Perú. Varios controles usan
+  // `new Date().getHours()` (detección fuera de horario en audit-anomaly.worker,
+  // marcaje de tardanza en personnel.service). En un contenedor en UTC (lo
+  // habitual) la ventana se desplazaba 5h → falsos positivos/negativos. Node
+  // ejecuta tzset() al asignar process.env.TZ. Respeta un TZ explícito si existe.
+  process.env.TZ = process.env.TZ ?? "America/Lima"
+
   const app = await NestFactory.create(AppModule)
   const config = app.get(ConfigService)
   const logger = new Logger("Bootstrap")
 
   const isProduction = config.get("NODE_ENV") === "production"
+
+  // SEC-22: fail-closed para el secreto de refresh. Sólo se accedía vía
+  // config.get() (sin getOrThrow en ningún punto); si faltaba, la firma/
+  // verificación de refresh tokens caía a un fallback del JwtModule (secreto de
+  // acceso), colapsando la separación access/refresh. Se aborta el arranque.
+  config.getOrThrow("JWT_REFRESH_SECRET")
 
   app.use(
     helmet({
@@ -100,6 +113,10 @@ async function bootstrap() {
 
   app.useWebSocketAdapter(new IoAdapter(app))
 
+  // SEC-21: la doc OpenAPI expone toda la superficie de la API. En producción se
+  // oculta salvo que SWAGGER_ENABLED=true lo habilite explícitamente.
+  const swaggerEnabled = !isProduction || config.get("SWAGGER_ENABLED") === "true"
+  if (swaggerEnabled) {
   const swaggerConfig = new DocumentBuilder()
     .setTitle("Clinica Automotriz Arellan Hnos -- API")
     .setDescription("API REST para gestion de taller automotriz. Modulos: Auth, Ordenes de Trabajo, Finanzas, Inventario, Personal, Asistencia, Compras, Comisiones, Cotizaciones, Facturacion, Pagos, Auditoria, Configuraciones")
@@ -128,11 +145,12 @@ async function bootstrap() {
   SwaggerModule.setup("api/docs", app, swaggerDocument, {
     swaggerOptions: { persistAuthorization: true, docExpansion: "list", filter: true }
   })
+  }
 
   const port = config.get("PORT", 3001)
   await app.listen(port)
   logger.log(`Arellan Platform v2.0 running on http://localhost:${port}`)
-  logger.log(`Swagger docs available at http://localhost:${port}/api/docs`)
+  if (swaggerEnabled) logger.log(`Swagger docs available at http://localhost:${port}/api/docs`)
   logger.log(`WebSocket available on ws://localhost:${port}`)
 }
 

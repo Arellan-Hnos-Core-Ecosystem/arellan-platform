@@ -112,7 +112,7 @@ export class OrdersService {
     return { data, nextCursor }
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, requester?: { id: string; role: string }) {
     const order = await this.prisma.workOrder.findUnique({
       where: { id },
       include: {
@@ -126,6 +126,23 @@ export class OrdersService {
     })
 
     if (!order) throw new NotFoundException("Orden de trabajo no encontrada")
+
+    // SEC-20 (BOLA/IDOR): la ruta sólo tenía JwtAuthGuard (sin RolesGuard ni
+    // control de propiedad), por lo que cualquier usuario autenticado podía leer
+    // CUALQUIER OT por su id (costos, diagnóstico, pagos, PII del cliente).
+    // Gestión (OWNER/ADMIN/FINANCE) ve todo; MECHANIC/TRAINEE sólo su OT asignada
+    // (el check-in auto-asigna mechanicId=userId); CLIENT sólo la suya. Se
+    // responde 404 para no revelar la existencia de recursos ajenos.
+    if (requester && !["OWNER", "ADMIN", "FINANCE"].includes(requester.role)) {
+      const isAssignedMechanic =
+        (requester.role === "MECHANIC" || requester.role === "TRAINEE") &&
+        order.mechanicId === requester.id
+      const isOwningClient = requester.role === "CLIENT" && order.clientId === requester.id
+      if (!isAssignedMechanic && !isOwningClient) {
+        throw new NotFoundException("Orden de trabajo no encontrada")
+      }
+    }
+
     return order
   }
 

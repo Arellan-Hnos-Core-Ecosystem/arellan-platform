@@ -20,6 +20,8 @@ class AuditFilterDto {
     to;
     limit;
     cursor;
+    page;
+    pageSize;
 }
 exports.AuditFilterDto = AuditFilterDto;
 __decorate([
@@ -59,4 +61,18 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], AuditFilterDto.prototype, "cursor", void 0);
+__decorate([
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(1),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], AuditFilterDto.prototype, "page", void 0);
+__decorate([
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(1),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], AuditFilterDto.prototype, "pageSize", void 0);
 //# sourceMappingURL=audit.dto.js.map

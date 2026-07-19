@@ -18,7 +18,7 @@ export declare class CompleteWorkOrderUseCase {
         orderId: string;
         orderNumber: string;
         previousStatus: "IN_PROGRESS";
-        newStatus: import(".prisma/client").$Enums.OrderStatus;
+        newStatus: import("@prisma/client").$Enums.OrderStatus;
         odometerOut: number;
         completedAt: string;
     }>;

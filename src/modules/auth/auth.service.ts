@@ -220,13 +220,40 @@ export class AuthService {
     const isValid = await bcrypt.compare(dto.currentPassword, account.passwordHash)
     if (!isValid) throw new UnauthorizedException("Contrasena actual incorrecta")
 
+    // SEC-15: la nueva contraseña debe diferir de la actual.
+    if (await bcrypt.compare(dto.newPassword, account.passwordHash)) {
+      throw new UnauthorizedException("La nueva contrasena debe ser distinta a la actual")
+    }
+
     const passwordHash = await bcrypt.hash(dto.newPassword, 12)
     await this.prisma.account.update({
       where: { id: userId },
       data: { passwordHash },
     })
 
-    return { message: "Contrasena actualizada correctamente" }
+    // SEC-19: invalidar TODAS las sesiones tras cambiar la contraseña (CWE-613).
+    // Antes, los refresh tokens y sesiones Redis previas seguían vigentes: un
+    // atacante con una sesión robada conservaba acceso pese al cambio de clave.
+    await this.prisma.refreshToken.updateMany({
+      where: { accountId: userId, revoked: false },
+      data: { revoked: true },
+    })
+    await this.invalidateAllSessions(userId)
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId,
+        userName: account.name,
+        role: account.role,
+        action: "PASSWORD_CHANGED",
+        entity: "Account",
+        entityId: userId,
+        severity: "WARNING",
+        ipAddress: "system",
+      },
+    })
+
+    return { message: "Contrasena actualizada correctamente. Vuelve a iniciar sesion." }
   }
 
   async refreshToken(refreshToken: string) {
@@ -383,12 +410,18 @@ export class AuthService {
   }
 
   private async generateTokens(account: Account, mfaVerified = false, ip?: string, userAgent?: string) {
+    // SEC-05: MFA es obligatorio para OWNER/ADMIN/FINANCE. Antes, mfaVerified
+    // era true cuando la cuenta NO tenía MFA activada (`!account.mfaEnabled`),
+    // lo que permitía a un privilegiado sin MFA pasar el MfaRequiredGuard. Ahora
+    // los roles privilegiados sólo quedan verificados si completaron el TOTP;
+    // los no privilegiados (MECHANIC/TRAINEE/CLIENT) no usan MFA.
+    const requiresMfa = ["OWNER", "ADMIN", "FINANCE"].includes(account.role)
     const payload: AuthUser = {
       id: account.id,
       email: account.email,
       role: account.role,
       name: account.name,
-      mfaVerified: mfaVerified || !account.mfaEnabled,
+      mfaVerified: mfaVerified || !requiresMfa,
     }
 
     const accessToken = this.jwt.sign(payload, {

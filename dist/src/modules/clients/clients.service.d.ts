@@ -18,7 +18,7 @@ export declare class ClientsService {
             address: string | null;
             notes: string | null;
             ruc: string | null;
-            type: import(".prisma/client").$Enums.ClientType;
+            type: import("@prisma/client").$Enums.ClientType;
             companyName: string | null;
             phone2: string | null;
             district: string | null;
@@ -34,7 +34,7 @@ export declare class ClientsService {
     findOne(id: string): Promise<{
         vehicles: {
             id: string;
-            status: import(".prisma/client").$Enums.VehicleStatus;
+            status: import("@prisma/client").$Enums.VehicleStatus;
             createdAt: Date;
             updatedAt: Date;
             notes: string | null;
@@ -44,11 +44,11 @@ export declare class ClientsService {
             year: number;
             color: string | null;
             vin: string | null;
-            engineType: import(".prisma/client").$Enums.EngineType;
+            engineType: import("@prisma/client").$Enums.EngineType;
             engineCC: number | null;
             mileage: number | null;
-            fuelType: import(".prisma/client").$Enums.FuelType;
-            transmission: import(".prisma/client").$Enums.TransmissionType;
+            fuelType: import("@prisma/client").$Enums.FuelType;
+            transmission: import("@prisma/client").$Enums.TransmissionType;
             clientId: string;
             photos: string[];
         }[];
@@ -65,7 +65,7 @@ export declare class ClientsService {
         address: string | null;
         notes: string | null;
         ruc: string | null;
-        type: import(".prisma/client").$Enums.ClientType;
+        type: import("@prisma/client").$Enums.ClientType;
         companyName: string | null;
         phone2: string | null;
         district: string | null;
@@ -88,7 +88,7 @@ export declare class ClientsService {
         address: string | null;
         notes: string | null;
         ruc: string | null;
-        type: import(".prisma/client").$Enums.ClientType;
+        type: import("@prisma/client").$Enums.ClientType;
         companyName: string | null;
         phone2: string | null;
         district: string | null;
@@ -111,7 +111,7 @@ export declare class ClientsService {
         address: string | null;
         notes: string | null;
         ruc: string | null;
-        type: import(".prisma/client").$Enums.ClientType;
+        type: import("@prisma/client").$Enums.ClientType;
         companyName: string | null;
         phone2: string | null;
         district: string | null;
@@ -133,16 +133,16 @@ export declare class ClientsService {
     } & {
         number: string;
         id: string;
-        status: import(".prisma/client").$Enums.OrderStatus;
+        status: import("@prisma/client").$Enums.OrderStatus;
         createdAt: Date;
         updatedAt: Date;
         description: string;
-        type: import(".prisma/client").$Enums.ServiceType;
+        type: import("@prisma/client").$Enums.ServiceType;
         clientId: string;
         photos: string[];
         vehicleId: string;
         mechanicId: string | null;
-        priority: import(".prisma/client").$Enums.Priority;
+        priority: import("@prisma/client").$Enums.Priority;
         diagnosis: string | null;
         recommendation: string | null;
         odometerIn: number | null;
@@ -159,7 +159,7 @@ export declare class ClientsService {
         startedAt: Date | null;
         completedAt: Date | null;
         deliveredAt: Date | null;
-        paymentStatus: import(".prisma/client").$Enums.InvoiceStatus;
+        paymentStatus: import("@prisma/client").$Enums.InvoiceStatus;
         customerNotes: string | null;
         internalNotes: string | null;
         signature: string | null;

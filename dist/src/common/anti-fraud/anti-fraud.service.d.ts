@@ -2,6 +2,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { IntegrityHashService } from "../crypto/integrity-hash.service";
 export interface FraudCheckContext {
     userId: string;
+    userName?: string;
     userRole: string;
     ipAddress: string;
     method: string;

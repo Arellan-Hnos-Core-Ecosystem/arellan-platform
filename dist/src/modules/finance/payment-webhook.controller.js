@@ -14,7 +14,9 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PaymentWebhookController = void 0;
 const common_1 = require("@nestjs/common");
+const swagger_1 = require("@nestjs/swagger");
 const finance_service_1 = require("./finance.service");
+const payment_webhook_guard_1 = require("./guards/payment-webhook.guard");
 let PaymentWebhookController = class PaymentWebhookController {
     financeService;
     constructor(financeService) {
@@ -29,12 +31,27 @@ let PaymentWebhookController = class PaymentWebhookController {
 exports.PaymentWebhookController = PaymentWebhookController;
 __decorate([
     (0, common_1.Post)("payment/confirm"),
+    (0, common_1.UseGuards)(payment_webhook_guard_1.PaymentWebhookGuard),
+    (0, swagger_1.ApiHeader)({
+        name: "x-webhook-signature",
+        description: "HMAC-SHA256 hex del qrToken firmado con PAYMENT_WEBHOOK_SECRET",
+        required: true,
+    }),
+    (0, swagger_1.ApiOperation)({
+        summary: "Confirmar pago (webhook firmado)",
+        description: "Confirma un pago asociado a un qrToken vigente. Requiere firma HMAC-SHA256 del qrToken en el header x-webhook-signature. Idempotente por qrToken.",
+    }),
+    (0, swagger_1.ApiResponse)({ status: 201, description: "Pago confirmado o ya procesado" }),
+    (0, swagger_1.ApiResponse)({ status: 400, description: "qrToken ausente, expirado o inválido" }),
+    (0, swagger_1.ApiResponse)({ status: 401, description: "Firma de webhook ausente o inválida" }),
+    (0, swagger_1.ApiResponse)({ status: 403, description: "PAYMENT_WEBHOOK_SECRET no configurado" }),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], PaymentWebhookController.prototype, "confirmPayment", null);
 exports.PaymentWebhookController = PaymentWebhookController = __decorate([
+    (0, swagger_1.ApiTags)("Finance"),
     (0, common_1.Controller)("webhooks"),
     __metadata("design:paramtypes", [finance_service_1.FinanceService])
 ], PaymentWebhookController);

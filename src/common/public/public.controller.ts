@@ -47,7 +47,9 @@ export class PublicController {
   async getOrder(@Param("id") id: string) {
     const order = await this.prisma.workOrder.findUnique({ where: { id }, include: { vehicle: true, statusHistory: { orderBy: { timestamp: "desc" } } } })
     if (!order) return { found: false, message: "Orden de trabajo no encontrada" }
-    return { found: true, vehicle: { plate: order.vehicle.plate, brand: order.vehicle.brand, model: order.vehicle.model, year: order.vehicle.year, color: order.vehicle.color }, order: { id: order.id, number: order.number, status: order.status, description: order.description, diagnosis: order.diagnosis, totalCost: order.totalCost, receivedAt: order.receivedAt, estimatedDelivery: order.estimatedDelivery, deliveredAt: order.deliveredAt, statusHistory: order.statusHistory.map((h) => ({ status: h.status, timestamp: h.timestamp })) } }
+    // SEC-12: endpoint público — NO exponer datos financieros ni diagnóstico
+    // técnico (antes se devolvían order.totalCost y order.diagnosis sin auth).
+    return { found: true, vehicle: { plate: order.vehicle.plate, brand: order.vehicle.brand, model: order.vehicle.model, year: order.vehicle.year, color: order.vehicle.color }, order: { id: order.id, number: order.number, status: order.status, description: order.description, receivedAt: order.receivedAt, estimatedDelivery: order.estimatedDelivery, deliveredAt: order.deliveredAt, statusHistory: order.statusHistory.map((h: { status: string; timestamp: Date }) => ({ status: h.status, timestamp: h.timestamp })) } }
   }
 
   @Get("orders/number/:orderNumber/status")

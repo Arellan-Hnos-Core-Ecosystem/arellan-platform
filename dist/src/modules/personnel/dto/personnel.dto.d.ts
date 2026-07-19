@@ -5,6 +5,7 @@ export declare class PersonnelFilterDto {
     search?: string;
     page?: number;
     limit?: number;
+    pageSize?: number;
 }
 export declare class CreatePersonnelDto {
     firstName: string;

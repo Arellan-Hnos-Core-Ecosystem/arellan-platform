@@ -62,6 +62,11 @@ export declare class RealtimeGateway implements OnGatewayInit, OnGatewayConnecti
         vehiclePlate: string;
         deliveredAt: string;
     }): void;
+    emitCashboxClosed(data: {
+        sessionId: string;
+        status: string;
+        closedBy: string;
+    }): void;
     emitInventoryLowStock(data: {
         itemId: string;
         itemName: string;
@@ -115,11 +120,17 @@ export declare class RealtimeGateway implements OnGatewayInit, OnGatewayConnecti
         sessionId?: string;
         userId?: string;
     }): void;
-    handleStatusChange(_client: Socket, data: OrderUpdatePayload): {
+    private getSocketUser;
+    private static parseId;
+    private canAccessOrder;
+    handleStatusChange(client: Socket, data: OrderUpdatePayload): Promise<{
         success: boolean;
-        eventId: string;
-    };
-    handleSubscribe(client: Socket, data: unknown): {
+        error: string;
+    } | {
+        success: boolean;
+        error?: undefined;
+    }>;
+    handleSubscribe(client: Socket, data: unknown): Promise<{
         success: boolean;
         error: string;
         room?: undefined;
@@ -127,7 +138,7 @@ export declare class RealtimeGateway implements OnGatewayInit, OnGatewayConnecti
         success: boolean;
         room: string;
         error?: undefined;
-    };
+    }>;
     handleUnsubscribe(client: Socket, data: unknown): {
         success: boolean;
         error: string;
@@ -135,9 +146,14 @@ export declare class RealtimeGateway implements OnGatewayInit, OnGatewayConnecti
         success: boolean;
         error?: undefined;
     };
-    handleMechanicProgress(_client: Socket, data: MechanicProgressPayload): Promise<{
+    handleMechanicProgress(client: Socket, data: MechanicProgressPayload): Promise<{
+        success: boolean;
+        error: string;
+        eventId?: undefined;
+    } | {
         success: boolean;
         eventId: string;
+        error?: undefined;
     }>;
     handleClientSubscribe(client: Socket, data: unknown): {
         success: boolean;

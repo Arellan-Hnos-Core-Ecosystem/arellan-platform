@@ -20,7 +20,7 @@ let AuditService = AuditService_1 = class AuditService {
         this.prisma = prisma;
     }
     async findAll(filters) {
-        const { userId, action, entity, from, to, limit = 50, cursor } = filters;
+        const { userId, action, entity, entityId, from, to, limit = 50, cursor, page, pageSize } = filters;
         const where = {};
         if (userId)
             where.userId = userId;
@@ -28,12 +28,36 @@ let AuditService = AuditService_1 = class AuditService {
             where.action = action;
         if (entity)
             where.entity = entity;
+        if (entityId)
+            where.entityId = entityId;
         if (from || to) {
             where.createdAt = {};
             if (from)
                 where.createdAt.gte = new Date(from);
             if (to)
                 where.createdAt.lte = new Date(to);
+        }
+        if (page !== undefined || pageSize !== undefined) {
+            const size = Math.min(pageSize ?? 20, 100);
+            const currentPage = page ?? 1;
+            const [pagedLogs, pagedTotal] = await Promise.all([
+                this.prisma.auditLog.findMany({
+                    where,
+                    take: size,
+                    skip: (currentPage - 1) * size,
+                    orderBy: { createdAt: "desc" },
+                }),
+                this.prisma.auditLog.count({ where }),
+            ]);
+            return {
+                data: pagedLogs,
+                pagination: {
+                    total: pagedTotal,
+                    limit: size,
+                    cursor: null,
+                    hasNextPage: currentPage * size < pagedTotal,
+                },
+            };
         }
         const take = Math.min(limit, 100) + 1;
         const [logs, total] = await Promise.all([
@@ -64,7 +88,7 @@ let AuditService = AuditService_1 = class AuditService {
         return this.findAll({ userId, limit, cursor });
     }
     async getByEntity(entity, entityId, limit = 50, cursor) {
-        return this.findAll({ entity, limit, cursor });
+        return this.findAll({ entity, entityId, limit, cursor });
     }
 };
 exports.AuditService = AuditService;

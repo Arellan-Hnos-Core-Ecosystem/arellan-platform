@@ -12,11 +12,13 @@ var OrdersService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.OrdersService = void 0;
 const common_1 = require("@nestjs/common");
+const config_1 = require("@nestjs/config");
 const crypto_1 = require("crypto");
 const prisma_service_1 = require("../../common/prisma/prisma.service");
 const client_1 = require("@prisma/client");
 const realtime_gateway_1 = require("../../common/gateway/realtime.gateway");
 const work_order_entity_1 = require("../../domain/work-orders/entities/work-order.entity");
+const iot_bridge_client_1 = require("../../common/iot-bridge/iot-bridge.client");
 const VALID_TRANSITIONS = {
     RECEIVED: [client_1.OrderStatus.IN_DIAGNOSIS, client_1.OrderStatus.CANCELLED],
     IN_DIAGNOSIS: [client_1.OrderStatus.BUDGETED, client_1.OrderStatus.CANCELLED],
@@ -37,10 +39,14 @@ const ORDER_INCLUDE = {
 let OrdersService = OrdersService_1 = class OrdersService {
     prisma;
     wsGateway;
+    config;
+    iotBridge;
     logger = new common_1.Logger(OrdersService_1.name);
-    constructor(prisma, wsGateway) {
+    constructor(prisma, wsGateway, config, iotBridge) {
         this.prisma = prisma;
         this.wsGateway = wsGateway;
+        this.config = config;
+        this.iotBridge = iotBridge;
     }
     async create(dto, userId) {
         const year = new Date().getFullYear();
@@ -69,7 +75,7 @@ let OrdersService = OrdersService_1 = class OrdersService {
         return order;
     }
     async findAll(filters) {
-        const { status, mechanicId, from, to, limit = 20, cursor } = filters;
+        const { status, mechanicId, from, to, limit = 20, cursor, page, pageSize } = filters;
         const where = {};
         if (status)
             where.status = status;
@@ -81,6 +87,18 @@ let OrdersService = OrdersService_1 = class OrdersService {
                 where.receivedAt.gte = new Date(from);
             if (to)
                 where.receivedAt.lte = new Date(to);
+        }
+        if (page !== undefined || pageSize !== undefined) {
+            const size = Math.min(pageSize ?? 10, 100);
+            const currentPage = page ?? 1;
+            const pagedOrders = await this.prisma.workOrder.findMany({
+                where,
+                take: size,
+                skip: (currentPage - 1) * size,
+                orderBy: { receivedAt: "desc" },
+                include: ORDER_INCLUDE,
+            });
+            return { data: pagedOrders, nextCursor: null };
         }
         const take = limit + 1;
         const orders = await this.prisma.workOrder.findMany({
@@ -95,7 +113,7 @@ let OrdersService = OrdersService_1 = class OrdersService {
         const nextCursor = hasMore ? data[data.length - 1].id : null;
         return { data, nextCursor };
     }
-    async findOne(id) {
+    async findOne(id, requester) {
         const order = await this.prisma.workOrder.findUnique({
             where: { id },
             include: {
@@ -109,6 +127,14 @@ let OrdersService = OrdersService_1 = class OrdersService {
         });
         if (!order)
             throw new common_1.NotFoundException("Orden de trabajo no encontrada");
+        if (requester && !["OWNER", "ADMIN", "FINANCE"].includes(requester.role)) {
+            const isAssignedMechanic = (requester.role === "MECHANIC" || requester.role === "TRAINEE") &&
+                order.mechanicId === requester.id;
+            const isOwningClient = requester.role === "CLIENT" && order.clientId === requester.id;
+            if (!isAssignedMechanic && !isOwningClient) {
+                throw new common_1.NotFoundException("Orden de trabajo no encontrada");
+            }
+        }
         return order;
     }
     async update(id, dto) {
@@ -678,11 +704,32 @@ let OrdersService = OrdersService_1 = class OrdersService {
         this.logger.log(`Captura ONVIF (${position}) vinculada a OT ${order.number} desde camara ${dto.cameraId}`);
         return { orderId, orderNumber: order.number, position, hash, photoCount: updated.photos.length };
     }
+    async requestCameraCapture(orderId, position) {
+        const order = await this.prisma.workOrder.findUnique({ where: { id: orderId } });
+        if (!order) {
+            throw new common_1.NotFoundException("OT no encontrada");
+        }
+        const pos = position.toUpperCase().trim();
+        const allowedPositions = work_order_entity_1.WorkOrder.REQUIRED_CHECKIN_POSITIONS;
+        if (!allowedPositions.includes(pos)) {
+            throw new common_1.BadRequestException(`Posicion invalida: ${pos}. Permitidas: ${allowedPositions.join(", ")}`);
+        }
+        const cameraId = this.config.get("ONVIF_DEFAULT_CAMERA_ID", "CAM-BAHIA-01");
+        try {
+            return await this.iotBridge.requestCapture(cameraId, { orderId, position: pos });
+        }
+        catch (error) {
+            this.logger.warn(`Captura ONVIF no disponible (OT ${order.number}, camara ${cameraId}): ${error.message}`);
+            return { requested: true, delivered: false, orderId, orderNumber: order.number, position: pos, cameraId };
+        }
+    }
 };
 exports.OrdersService = OrdersService;
 exports.OrdersService = OrdersService = OrdersService_1 = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
-        realtime_gateway_1.RealtimeGateway])
+        realtime_gateway_1.RealtimeGateway,
+        config_1.ConfigService,
+        iot_bridge_client_1.IotBridgeClient])
 ], OrdersService);
 //# sourceMappingURL=orders.service.js.map

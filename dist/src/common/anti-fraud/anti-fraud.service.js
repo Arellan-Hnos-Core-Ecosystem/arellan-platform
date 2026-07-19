@@ -127,7 +127,7 @@ let AntiFraudService = AntiFraudService_1 = class AntiFraudService {
             await this.prisma.auditLog.create({
                 data: {
                     userId: ctx.userId,
-                    userName: ctx.userId,
+                    userName: ctx.userName ?? ctx.userId,
                     role: ctx.userRole,
                     action: `FRAUD_${alert.type}`,
                     entity: ctx.entity,

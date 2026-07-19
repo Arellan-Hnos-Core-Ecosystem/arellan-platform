@@ -42,4 +42,5 @@ export declare class ExpenseFiltersDto {
     endDate?: string;
     page?: number;
     size?: number;
+    pageSize?: number;
 }

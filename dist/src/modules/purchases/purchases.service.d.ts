@@ -21,7 +21,7 @@ export declare class PurchasesService {
         } & {
             number: string;
             id: string;
-            status: import(".prisma/client").$Enums.PurchaseStatus;
+            status: import("@prisma/client").$Enums.PurchaseStatus;
             createdAt: Date;
             updatedAt: Date;
             notes: string | null;
@@ -32,8 +32,8 @@ export declare class PurchasesService {
             createdBy: string;
             currency: string;
             approvedBy: string | null;
-            total: Prisma.Decimal;
             subtotal: Prisma.Decimal;
+            total: Prisma.Decimal;
             shipping: Prisma.Decimal;
             customs: Prisma.Decimal;
             expectedAt: Date | null;
@@ -56,7 +56,7 @@ export declare class PurchasesService {
             };
         } & {
             id: string;
-            status: import(".prisma/client").$Enums.ApprovalStatus;
+            status: import("@prisma/client").$Enums.ApprovalStatus;
             createdAt: Date;
             notes: string | null;
             type: string;
@@ -104,7 +104,7 @@ export declare class PurchasesService {
     } & {
         number: string;
         id: string;
-        status: import(".prisma/client").$Enums.PurchaseStatus;
+        status: import("@prisma/client").$Enums.PurchaseStatus;
         createdAt: Date;
         updatedAt: Date;
         notes: string | null;
@@ -115,8 +115,8 @@ export declare class PurchasesService {
         createdBy: string;
         currency: string;
         approvedBy: string | null;
-        total: Prisma.Decimal;
         subtotal: Prisma.Decimal;
+        total: Prisma.Decimal;
         shipping: Prisma.Decimal;
         customs: Prisma.Decimal;
         expectedAt: Date | null;
@@ -149,7 +149,7 @@ export declare class PurchasesService {
     } & {
         number: string;
         id: string;
-        status: import(".prisma/client").$Enums.PurchaseStatus;
+        status: import("@prisma/client").$Enums.PurchaseStatus;
         createdAt: Date;
         updatedAt: Date;
         notes: string | null;
@@ -160,8 +160,8 @@ export declare class PurchasesService {
         createdBy: string;
         currency: string;
         approvedBy: string | null;
-        total: Prisma.Decimal;
         subtotal: Prisma.Decimal;
+        total: Prisma.Decimal;
         shipping: Prisma.Decimal;
         customs: Prisma.Decimal;
         expectedAt: Date | null;
@@ -188,7 +188,7 @@ export declare class PurchasesService {
     } & {
         number: string;
         id: string;
-        status: import(".prisma/client").$Enums.PurchaseStatus;
+        status: import("@prisma/client").$Enums.PurchaseStatus;
         createdAt: Date;
         updatedAt: Date;
         notes: string | null;
@@ -199,8 +199,8 @@ export declare class PurchasesService {
         createdBy: string;
         currency: string;
         approvedBy: string | null;
-        total: Prisma.Decimal;
         subtotal: Prisma.Decimal;
+        total: Prisma.Decimal;
         shipping: Prisma.Decimal;
         customs: Prisma.Decimal;
         expectedAt: Date | null;
@@ -230,7 +230,7 @@ export declare class PurchasesService {
     } & {
         number: string;
         id: string;
-        status: import(".prisma/client").$Enums.PurchaseStatus;
+        status: import("@prisma/client").$Enums.PurchaseStatus;
         createdAt: Date;
         updatedAt: Date;
         notes: string | null;
@@ -241,8 +241,8 @@ export declare class PurchasesService {
         createdBy: string;
         currency: string;
         approvedBy: string | null;
-        total: Prisma.Decimal;
         subtotal: Prisma.Decimal;
+        total: Prisma.Decimal;
         shipping: Prisma.Decimal;
         customs: Prisma.Decimal;
         expectedAt: Date | null;
@@ -258,7 +258,7 @@ export declare class PurchasesService {
     } & {
         number: string;
         id: string;
-        status: import(".prisma/client").$Enums.PurchaseStatus;
+        status: import("@prisma/client").$Enums.PurchaseStatus;
         createdAt: Date;
         updatedAt: Date;
         notes: string | null;
@@ -269,8 +269,8 @@ export declare class PurchasesService {
         createdBy: string;
         currency: string;
         approvedBy: string | null;
-        total: Prisma.Decimal;
         subtotal: Prisma.Decimal;
+        total: Prisma.Decimal;
         shipping: Prisma.Decimal;
         customs: Prisma.Decimal;
         expectedAt: Date | null;
@@ -290,7 +290,7 @@ export declare class PurchasesService {
     } & {
         number: string;
         id: string;
-        status: import(".prisma/client").$Enums.PurchaseStatus;
+        status: import("@prisma/client").$Enums.PurchaseStatus;
         createdAt: Date;
         updatedAt: Date;
         notes: string | null;
@@ -301,8 +301,8 @@ export declare class PurchasesService {
         createdBy: string;
         currency: string;
         approvedBy: string | null;
-        total: Prisma.Decimal;
         subtotal: Prisma.Decimal;
+        total: Prisma.Decimal;
         shipping: Prisma.Decimal;
         customs: Prisma.Decimal;
         expectedAt: Date | null;

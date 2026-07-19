@@ -276,7 +276,7 @@ export class InventoryService {
 
     await this.redis.del(`${CACHE_PREFIX}:item:${itemId}`)
     await this.invalidateCatalogCache()
-    await this.redis.del(`${CACHE_PREFIX}:lowstock:*`)
+    await this.invalidateByPattern(`${CACHE_PREFIX}:lowstock:*`)
     await this.redis.del(`${CACHE_PREFIX}:valuation`)
 
     this.logger.log(
@@ -431,7 +431,7 @@ export class InventoryService {
 
     await this.redis.del(`${CACHE_PREFIX}:item:${itemId}`)
     await this.invalidateCatalogCache()
-    await this.redis.del(`${CACHE_PREFIX}:lowstock:*`)
+    await this.invalidateByPattern(`${CACHE_PREFIX}:lowstock:*`)
     await this.redis.del(`${CACHE_PREFIX}:critical`)
     await this.redis.del(`${CACHE_PREFIX}:valuation`)
 
@@ -439,18 +439,23 @@ export class InventoryService {
   }
 
   private async invalidateCatalogCache() {
+    await this.invalidateByPattern(`${CACHE_PREFIX}:catalog:*`)
+  }
+
+  // MNT-06: DEL de Redis trata la clave como literal, no expande comodines.
+  // Las claves con patrón (p. ej. inventory:lowstock:*) deben escanearse; antes
+  // se hacía redis.del("inventory:lowstock:*") → no invalidaba nada.
+  private async invalidateByPattern(pattern: string) {
     try {
       const client = this.redis.client
       let cursor = "0"
       do {
-        const [nextCursor, keys] = await client.scan(
-          cursor, "MATCH", `${CACHE_PREFIX}:catalog:*`, "COUNT", 100,
-        )
+        const [nextCursor, keys] = await client.scan(cursor, "MATCH", pattern, "COUNT", 100)
         cursor = nextCursor
         if (keys.length > 0) await client.del(...keys)
       } while (cursor !== "0")
     } catch (err) {
-      this.logger.warn(`Cache invalidation warning: ${(err as Error).message}`)
+      this.logger.warn(`Cache invalidation warning (${pattern}): ${(err as Error).message}`)
     }
   }
 }

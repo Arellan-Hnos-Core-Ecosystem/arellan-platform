@@ -190,6 +190,7 @@ class ExpenseFiltersDto {
     endDate;
     page = 1;
     size = 20;
+    pageSize;
 }
 exports.ExpenseFiltersDto = ExpenseFiltersDto;
 __decorate([
@@ -239,4 +240,13 @@ __decorate([
     (0, class_validator_1.Max)(100),
     __metadata("design:type", Number)
 ], ExpenseFiltersDto.prototype, "size", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ description: "Alias de size enviado por el panel admin (1-100)", example: 10, minimum: 1, maximum: 100 }),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(1),
+    (0, class_validator_1.Max)(100),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], ExpenseFiltersDto.prototype, "pageSize", void 0);
 //# sourceMappingURL=finance.dto.js.map

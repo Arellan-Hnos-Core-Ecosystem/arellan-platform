@@ -13,13 +13,16 @@ exports.DeliverVehicleUseCase = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../../common/prisma/prisma.service");
 const realtime_gateway_1 = require("../../../common/gateway/realtime.gateway");
+const event_emitter_1 = require("@nestjs/event-emitter");
 const client_1 = require("@prisma/client");
 let DeliverVehicleUseCase = class DeliverVehicleUseCase {
     prisma;
     wsGateway;
-    constructor(prisma, wsGateway) {
+    eventEmitter;
+    constructor(prisma, wsGateway, eventEmitter) {
         this.prisma = prisma;
         this.wsGateway = wsGateway;
+        this.eventEmitter = eventEmitter;
     }
     async execute(orderId, params) {
         const order = await this.prisma.workOrder.findUnique({
@@ -101,6 +104,7 @@ let DeliverVehicleUseCase = class DeliverVehicleUseCase {
             vehiclePlate: order.vehicle?.plate ?? "",
             deliveredAt: new Date().toISOString(),
         });
+        this.eventEmitter.emit("order.delivered", { orderId });
         return {
             success: true,
             orderId,
@@ -115,6 +119,7 @@ exports.DeliverVehicleUseCase = DeliverVehicleUseCase;
 exports.DeliverVehicleUseCase = DeliverVehicleUseCase = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
-        realtime_gateway_1.RealtimeGateway])
+        realtime_gateway_1.RealtimeGateway,
+        event_emitter_1.EventEmitter2])
 ], DeliverVehicleUseCase);
 //# sourceMappingURL=deliver-vehicle.use-case.js.map

@@ -15,6 +15,7 @@ interface AuditFilters {
   userId?: string
   action?: string
   entity?: string
+  entityId?: string
   from?: string
   to?: string
   limit?: number
@@ -30,13 +31,14 @@ export class AuditService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(filters: AuditFilters): Promise<PaginatedResult<any>> {
-    const { userId, action, entity, from, to, limit = 50, cursor, page, pageSize } = filters
+    const { userId, action, entity, entityId, from, to, limit = 50, cursor, page, pageSize } = filters
 
     const where: Record<string, unknown> = {}
 
     if (userId) where.userId = userId
     if (action) where.action = action
     if (entity) where.entity = entity
+    if (entityId) where.entityId = entityId
 
     if (from || to) {
       where.createdAt = {}
@@ -106,6 +108,7 @@ export class AuditService {
   }
 
   async getByEntity(entity: string, entityId: string, limit = 50, cursor?: string): Promise<PaginatedResult<any>> {
-    return this.findAll({ entity, limit, cursor })
+    // FUN-12: antes se ignoraba entityId y se devolvían todos los logs del tipo.
+    return this.findAll({ entity, entityId, limit, cursor })
   }
 }

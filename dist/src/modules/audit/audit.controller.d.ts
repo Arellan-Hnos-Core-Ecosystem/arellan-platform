@@ -20,7 +20,7 @@ export declare class AuditController {
         ipAddress: string;
         userAgent: string | null;
         metadata: import("@prisma/client/runtime/library").JsonValue | null;
-        severity: import(".prisma/client").$Enums.AuditSeverity;
+        severity: import("@prisma/client").$Enums.AuditSeverity;
         userId: string;
     }>;
 }

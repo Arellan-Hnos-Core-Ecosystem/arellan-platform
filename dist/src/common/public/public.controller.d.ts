@@ -38,13 +38,13 @@ export declare class PublicController {
         order: {
             id: string;
             number: string;
-            status: import(".prisma/client").$Enums.OrderStatus;
+            status: import("@prisma/client").$Enums.OrderStatus;
             description: string;
             receivedAt: Date;
             estimatedDelivery: Date | null;
             deliveredAt: Date | null;
             statusHistory: {
-                status: import(".prisma/client").$Enums.OrderStatus;
+                status: import("@prisma/client").$Enums.OrderStatus;
                 timestamp: Date;
             }[];
         };
@@ -68,15 +68,13 @@ export declare class PublicController {
         order: {
             id: string;
             number: string;
-            status: import(".prisma/client").$Enums.OrderStatus;
+            status: import("@prisma/client").$Enums.OrderStatus;
             description: string;
-            diagnosis: string | null;
-            totalCost: import("@prisma/client/runtime/library").Decimal | null;
             receivedAt: Date;
             estimatedDelivery: Date | null;
             deliveredAt: Date | null;
             statusHistory: {
-                status: import(".prisma/client").$Enums.OrderStatus;
+                status: string;
                 timestamp: Date;
             }[];
         };
@@ -90,7 +88,8 @@ export declare class PublicController {
         found: boolean;
         order: {
             number: string;
-            status: import(".prisma/client").$Enums.OrderStatus;
+            status: import("@prisma/client").$Enums.OrderStatus;
+            description: string;
             client: {
                 firstName: string;
             };
@@ -101,12 +100,11 @@ export declare class PublicController {
                 year: number;
                 color: string | null;
             };
-            description: string;
             receivedAt: Date;
             estimatedDelivery: Date | null;
             deliveredAt: Date | null;
             statusHistory: {
-                status: import(".prisma/client").$Enums.OrderStatus;
+                status: import("@prisma/client").$Enums.OrderStatus;
                 timestamp: Date;
             }[];
         };

@@ -8,9 +8,9 @@ export declare class PersonnelController {
         data: {
             id: string;
             email: string;
-            role: import(".prisma/client").$Enums.UserRole;
+            role: import("@prisma/client").$Enums.UserRole;
             name: string;
-            status: import(".prisma/client").$Enums.AccountStatus;
+            status: import("@prisma/client").$Enums.AccountStatus;
             lastLoginAt: Date | null;
             createdAt: Date;
         }[];
@@ -24,9 +24,9 @@ export declare class PersonnelController {
             id: string;
             email: string;
             mfaEnabled: boolean;
-            role: import(".prisma/client").$Enums.UserRole;
+            role: import("@prisma/client").$Enums.UserRole;
             name: string;
-            status: import(".prisma/client").$Enums.AccountStatus;
+            status: import("@prisma/client").$Enums.AccountStatus;
             lastLoginAt: Date | null;
             createdAt: Date;
             updatedAt: Date;
@@ -37,7 +37,7 @@ export declare class PersonnelController {
                 createdAt: Date;
                 updatedAt: Date;
                 notes: string | null;
-                type: import(".prisma/client").$Enums.AttendanceType;
+                type: import("@prisma/client").$Enums.AttendanceType;
                 personnelId: string;
                 date: Date;
                 checkIn: Date | null;
@@ -47,7 +47,7 @@ export declare class PersonnelController {
             vehicleUsages: ({
                 vehicle: {
                     id: string;
-                    status: import(".prisma/client").$Enums.VehicleStatus;
+                    status: import("@prisma/client").$Enums.VehicleStatus;
                     createdAt: Date;
                     updatedAt: Date;
                     notes: string | null;
@@ -57,17 +57,17 @@ export declare class PersonnelController {
                     year: number;
                     color: string | null;
                     vin: string | null;
-                    engineType: import(".prisma/client").$Enums.EngineType;
+                    engineType: import("@prisma/client").$Enums.EngineType;
                     engineCC: number | null;
                     mileage: number | null;
-                    fuelType: import(".prisma/client").$Enums.FuelType;
-                    transmission: import(".prisma/client").$Enums.TransmissionType;
+                    fuelType: import("@prisma/client").$Enums.FuelType;
+                    transmission: import("@prisma/client").$Enums.TransmissionType;
                     clientId: string;
                     photos: string[];
                 };
             } & {
                 id: string;
-                status: import(".prisma/client").$Enums.UsageStatus;
+                status: import("@prisma/client").$Enums.UsageStatus;
                 createdAt: Date;
                 updatedAt: Date;
                 notes: string | null;
@@ -78,8 +78,8 @@ export declare class PersonnelController {
                 authorizedBy: string | null;
                 purpose: string;
                 destination: string | null;
-                expectedReturn: Date;
                 checkoutAt: Date;
+                expectedReturn: Date;
                 returnAt: Date | null;
             })[];
             _count: {
@@ -101,11 +101,11 @@ export declare class PersonnelController {
             address: string | null;
             birthDate: Date | null;
             nationality: string;
-            contractType: import(".prisma/client").$Enums.ContractType;
+            contractType: import("@prisma/client").$Enums.ContractType;
             position: string;
             department: string | null;
             salary: import("@prisma/client/runtime/library").Decimal;
-            salaryType: import(".prisma/client").$Enums.SalaryType;
+            salaryType: import("@prisma/client").$Enums.SalaryType;
             startDate: Date;
             endDate: Date | null;
             photo: string | null;
@@ -116,23 +116,23 @@ export declare class PersonnelController {
     updateRole(id: string, dto: UpdateRoleDto, user: AuthUser): Promise<{
         id: string;
         email: string;
-        role: import(".prisma/client").$Enums.UserRole;
+        role: import("@prisma/client").$Enums.UserRole;
         name: string;
-        status: import(".prisma/client").$Enums.AccountStatus;
+        status: import("@prisma/client").$Enums.AccountStatus;
     }>;
     updateStatus(id: string, dto: UpdateAccountStatusDto): Promise<{
         id: string;
         email: string;
-        role: import(".prisma/client").$Enums.UserRole;
+        role: import("@prisma/client").$Enums.UserRole;
         name: string;
-        status: import(".prisma/client").$Enums.AccountStatus;
+        status: import("@prisma/client").$Enums.AccountStatus;
     }>;
     checkIn(user: AuthUser, dto: CheckInOutDto): Promise<{
         id: string;
         createdAt: Date;
         updatedAt: Date;
         notes: string | null;
-        type: import(".prisma/client").$Enums.AttendanceType;
+        type: import("@prisma/client").$Enums.AttendanceType;
         personnelId: string;
         date: Date;
         checkIn: Date | null;
@@ -144,7 +144,7 @@ export declare class PersonnelController {
         createdAt: Date;
         updatedAt: Date;
         notes: string | null;
-        type: import(".prisma/client").$Enums.AttendanceType;
+        type: import("@prisma/client").$Enums.AttendanceType;
         personnelId: string;
         date: Date;
         checkIn: Date | null;
@@ -158,7 +158,7 @@ export declare class PersonnelController {
                 account: {
                     id: string;
                     email: string;
-                    role: import(".prisma/client").$Enums.UserRole;
+                    role: import("@prisma/client").$Enums.UserRole;
                 };
                 firstName: string;
                 lastName: string;
@@ -169,7 +169,7 @@ export declare class PersonnelController {
             createdAt: Date;
             updatedAt: Date;
             notes: string | null;
-            type: import(".prisma/client").$Enums.AttendanceType;
+            type: import("@prisma/client").$Enums.AttendanceType;
             personnelId: string;
             date: Date;
             checkIn: Date | null;
@@ -191,7 +191,7 @@ export declare class PersonnelController {
         };
         vehicle: {
             id: string;
-            status: import(".prisma/client").$Enums.VehicleStatus;
+            status: import("@prisma/client").$Enums.VehicleStatus;
             createdAt: Date;
             updatedAt: Date;
             notes: string | null;
@@ -201,17 +201,17 @@ export declare class PersonnelController {
             year: number;
             color: string | null;
             vin: string | null;
-            engineType: import(".prisma/client").$Enums.EngineType;
+            engineType: import("@prisma/client").$Enums.EngineType;
             engineCC: number | null;
             mileage: number | null;
-            fuelType: import(".prisma/client").$Enums.FuelType;
-            transmission: import(".prisma/client").$Enums.TransmissionType;
+            fuelType: import("@prisma/client").$Enums.FuelType;
+            transmission: import("@prisma/client").$Enums.TransmissionType;
             clientId: string;
             photos: string[];
         };
     } & {
         id: string;
-        status: import(".prisma/client").$Enums.UsageStatus;
+        status: import("@prisma/client").$Enums.UsageStatus;
         createdAt: Date;
         updatedAt: Date;
         notes: string | null;
@@ -222,8 +222,8 @@ export declare class PersonnelController {
         authorizedBy: string | null;
         purpose: string;
         destination: string | null;
-        expectedReturn: Date;
         checkoutAt: Date;
+        expectedReturn: Date;
         returnAt: Date | null;
     }>;
     getActiveVehicleUsages(): Promise<({
@@ -234,7 +234,7 @@ export declare class PersonnelController {
         };
         vehicle: {
             id: string;
-            status: import(".prisma/client").$Enums.VehicleStatus;
+            status: import("@prisma/client").$Enums.VehicleStatus;
             createdAt: Date;
             updatedAt: Date;
             notes: string | null;
@@ -244,17 +244,17 @@ export declare class PersonnelController {
             year: number;
             color: string | null;
             vin: string | null;
-            engineType: import(".prisma/client").$Enums.EngineType;
+            engineType: import("@prisma/client").$Enums.EngineType;
             engineCC: number | null;
             mileage: number | null;
-            fuelType: import(".prisma/client").$Enums.FuelType;
-            transmission: import(".prisma/client").$Enums.TransmissionType;
+            fuelType: import("@prisma/client").$Enums.FuelType;
+            transmission: import("@prisma/client").$Enums.TransmissionType;
             clientId: string;
             photos: string[];
         };
     } & {
         id: string;
-        status: import(".prisma/client").$Enums.UsageStatus;
+        status: import("@prisma/client").$Enums.UsageStatus;
         createdAt: Date;
         updatedAt: Date;
         notes: string | null;
@@ -265,8 +265,8 @@ export declare class PersonnelController {
         authorizedBy: string | null;
         purpose: string;
         destination: string | null;
-        expectedReturn: Date;
         checkoutAt: Date;
+        expectedReturn: Date;
         returnAt: Date | null;
     })[]>;
     getOverdueVehicleUsages(): Promise<({
@@ -277,7 +277,7 @@ export declare class PersonnelController {
         };
         vehicle: {
             id: string;
-            status: import(".prisma/client").$Enums.VehicleStatus;
+            status: import("@prisma/client").$Enums.VehicleStatus;
             createdAt: Date;
             updatedAt: Date;
             notes: string | null;
@@ -287,17 +287,17 @@ export declare class PersonnelController {
             year: number;
             color: string | null;
             vin: string | null;
-            engineType: import(".prisma/client").$Enums.EngineType;
+            engineType: import("@prisma/client").$Enums.EngineType;
             engineCC: number | null;
             mileage: number | null;
-            fuelType: import(".prisma/client").$Enums.FuelType;
-            transmission: import(".prisma/client").$Enums.TransmissionType;
+            fuelType: import("@prisma/client").$Enums.FuelType;
+            transmission: import("@prisma/client").$Enums.TransmissionType;
             clientId: string;
             photos: string[];
         };
     } & {
         id: string;
-        status: import(".prisma/client").$Enums.UsageStatus;
+        status: import("@prisma/client").$Enums.UsageStatus;
         createdAt: Date;
         updatedAt: Date;
         notes: string | null;
@@ -308,8 +308,8 @@ export declare class PersonnelController {
         authorizedBy: string | null;
         purpose: string;
         destination: string | null;
-        expectedReturn: Date;
         checkoutAt: Date;
+        expectedReturn: Date;
         returnAt: Date | null;
     })[]>;
 }

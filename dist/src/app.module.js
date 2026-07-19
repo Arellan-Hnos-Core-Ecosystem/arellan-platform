@@ -10,6 +10,7 @@ exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const throttler_1 = require("@nestjs/throttler");
+const event_emitter_1 = require("@nestjs/event-emitter");
 const core_1 = require("@nestjs/core");
 const prisma_module_1 = require("./common/prisma/prisma.module");
 const redis_module_1 = require("./common/redis/redis.module");
@@ -19,6 +20,7 @@ const queue_module_1 = require("./queues/queue.module");
 const workers_module_1 = require("./workers/workers.module");
 const gateways_module_1 = require("./gateways/gateways.module");
 const realtime_module_1 = require("./common/gateway/realtime.module");
+const iot_bridge_module_1 = require("./common/iot-bridge/iot-bridge.module");
 const auth_module_1 = require("./modules/auth/auth.module");
 const orders_module_1 = require("./modules/orders/orders.module");
 const finance_module_1 = require("./modules/finance/finance.module");
@@ -38,8 +40,10 @@ const health_module_1 = require("./common/health/health.module");
 const public_module_1 = require("./common/public/public.module");
 const anti_fraud_module_1 = require("./common/anti-fraud/anti-fraud.module");
 const dashboard_module_1 = require("./modules/dashboard/dashboard.module");
+const analytics_module_1 = require("./modules/analytics/analytics.module");
 const audit_interceptor_1 = require("./common/interceptors/audit.interceptor");
 const data_masking_interceptor_1 = require("./common/interceptors/data-masking.interceptor");
+const anti_fraud_interceptor_1 = require("./common/anti-fraud/anti-fraud.interceptor");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -47,6 +51,7 @@ exports.AppModule = AppModule = __decorate([
     (0, common_1.Module)({
         imports: [
             config_1.ConfigModule.forRoot({ isGlobal: true }),
+            event_emitter_1.EventEmitterModule.forRoot(),
             throttler_1.ThrottlerModule.forRoot([{ ttl: 60000, limit: 60 }]),
             prisma_module_1.PrismaModule,
             redis_module_1.RedisModule,
@@ -56,6 +61,7 @@ exports.AppModule = AppModule = __decorate([
             workers_module_1.WorkersModule,
             gateways_module_1.GatewaysModule,
             realtime_module_1.RealtimeModule,
+            iot_bridge_module_1.IotBridgeModule,
             auth_module_1.AuthModule,
             orders_module_1.OrdersModule,
             finance_module_1.FinanceModule,
@@ -75,9 +81,11 @@ exports.AppModule = AppModule = __decorate([
             public_module_1.PublicModule,
             anti_fraud_module_1.AntiFraudModule,
             dashboard_module_1.DashboardModule,
+            analytics_module_1.AnalyticsModule,
         ],
         providers: [
             { provide: core_1.APP_GUARD, useClass: throttler_1.ThrottlerGuard },
+            { provide: core_1.APP_INTERCEPTOR, useClass: anti_fraud_interceptor_1.AntiFraudInterceptor },
             { provide: core_1.APP_INTERCEPTOR, useClass: audit_interceptor_1.AuditInterceptor },
             { provide: core_1.APP_INTERCEPTOR, useClass: data_masking_interceptor_1.DataMaskingInterceptor },
         ],

@@ -29,6 +29,7 @@ const data_masking_interceptor_1 = require("../../common/interceptors/data-maski
 const roles_decorator_1 = require("../../common/decorators/roles.decorator");
 const current_user_decorator_1 = require("../../common/decorators/current-user.decorator");
 const client_1 = require("@prisma/client");
+const PHOTO_UPLOAD_LIMITS = { fileSize: 8 * 1024 * 1024 };
 let OrdersController = class OrdersController {
     ordersService;
     sendOrderQuoteUseCase;
@@ -56,8 +57,8 @@ let OrdersController = class OrdersController {
     findByStatus(status) {
         return this.ordersService.findAll({ status: status });
     }
-    findOne(id) {
-        return this.ordersService.findOne(id);
+    findOne(id, user) {
+        return this.ordersService.findOne(id, { id: user.id, role: user.role });
     }
     create(dto, user) {
         return this.ordersService.create(dto, user.id);
@@ -131,16 +132,22 @@ let OrdersController = class OrdersController {
     async vehicleCheckin(body, photos, user) {
         return this.ordersService.vehicleCheckin(body, photos ?? [], user?.id ?? "system", user?.name ?? "Sistema");
     }
+    async requestCameraCapture(id, dto) {
+        return this.ordersService.requestCameraCapture(id, dto.position);
+    }
 };
 exports.OrdersController = OrdersController;
 __decorate([
     (0, common_1.Get)(),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.OWNER, client_1.UserRole.ADMIN, client_1.UserRole.FINANCE),
+    (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
     (0, swagger_1.ApiOperation)({
-        summary: "Listar ordenes de trabajo",
-        description: "Listado paginado de todas las OT con filtros por estado, mecanico, rango de fechas, cursor. Incluye datos de vehiculo, cliente y mecanico asignado.",
+        summary: "Listar ordenes de trabajo (gestion)",
+        description: "Listado paginado de todas las OT con filtros por estado, mecanico, rango de fechas, cursor. Restringido a OWNER/ADMIN/FINANCE; los mecanicos usan GET /orders/my.",
     }),
     (0, swagger_1.ApiResponse)({ status: 200, description: "Listado paginado de ordenes" }),
     (0, swagger_1.ApiResponse)({ status: 401, description: "JWT invalido o expirado" }),
+    (0, swagger_1.ApiResponse)({ status: 403, description: "Solo OWNER, ADMIN o FINANCE" }),
     __param(0, (0, common_1.Query)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [orders_dto_1.OrderFilterDto]),
@@ -197,8 +204,9 @@ __decorate([
     (0, swagger_1.ApiResponse)({ status: 401, description: "JWT invalido" }),
     (0, swagger_1.ApiResponse)({ status: 404, description: "Orden no encontrada" }),
     __param(0, (0, common_1.Param)("id")),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", void 0)
 ], OrdersController.prototype, "findOne", null);
 __decorate([
@@ -297,7 +305,7 @@ __decorate([
     (0, common_1.Post)(":id/photos"),
     (0, roles_decorator_1.Roles)(client_1.UserRole.MECHANIC, client_1.UserRole.TRAINEE, client_1.UserRole.ADMIN, client_1.UserRole.OWNER),
     (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
-    (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)("photo")),
+    (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)("photo", { limits: PHOTO_UPLOAD_LIMITS })),
     (0, swagger_1.ApiOperation)({
         summary: "Subir foto a una orden de trabajo",
         description: "Adjunta una imagen (JPEG/PNG) a la OT. Usado por mecanicos desde la tablet para documentar el estado del vehiculo. Invalida cache de ordenes.",
@@ -467,7 +475,7 @@ __decorate([
     (0, common_1.Post)("checkin"),
     (0, roles_decorator_1.Roles)(client_1.UserRole.MECHANIC, client_1.UserRole.TRAINEE, client_1.UserRole.ADMIN, client_1.UserRole.OWNER),
     (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
-    (0, common_1.UseInterceptors)(data_masking_interceptor_1.DataMaskingInterceptor, (0, platform_express_1.FilesInterceptor)("photos", 10)),
+    (0, common_1.UseInterceptors)(data_masking_interceptor_1.DataMaskingInterceptor, (0, platform_express_1.FilesInterceptor)("photos", 10, { limits: PHOTO_UPLOAD_LIMITS })),
     (0, swagger_1.ApiOperation)({
         summary: "Ingreso rapido de vehiculo al taller",
         description: "Crea o encuentra un vehiculo por placa y genera una OT nueva. Recibe fotos multipart del vehiculo. Usado desde la tablet por el mecanico al recibir un auto.",
@@ -492,6 +500,25 @@ __decorate([
     __metadata("design:paramtypes", [orders_dto_1.VehicleCheckinDto, Array, Object]),
     __metadata("design:returntype", Promise)
 ], OrdersController.prototype, "vehicleCheckin", null);
+__decorate([
+    (0, common_1.Post)(":id/photos/camera-capture"),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.MECHANIC, client_1.UserRole.TRAINEE, client_1.UserRole.ADMIN, client_1.UserRole.OWNER),
+    (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, swagger_1.ApiOperation)({
+        summary: "Disparar captura ONVIF de la camara de bahia (Anti-Fraude #8)",
+        description: "Ordena al bridge arellan-hardware-iot (puerto 3007) tomar un snapshot ONVIF de la camara de la bahia de check-in y vincularlo a la posicion indicada de la OT, como evidencia adicional a las fotos manuales de la tablet.",
+    }),
+    (0, swagger_1.ApiParam)({ name: "id", description: "ID de la OT (UUID v4)" }),
+    (0, swagger_1.ApiResponse)({ status: 201, description: "Captura solicitada (entregada o pendiente si el bridge no responde)" }),
+    (0, swagger_1.ApiResponse)({ status: 400, description: "Posicion invalida" }),
+    (0, swagger_1.ApiResponse)({ status: 401, description: "JWT invalido" }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: "OT no encontrada" }),
+    __param(0, (0, common_1.Param)("id")),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, orders_dto_1.RequestCameraCaptureDto]),
+    __metadata("design:returntype", Promise)
+], OrdersController.prototype, "requestCameraCapture", null);
 exports.OrdersController = OrdersController = __decorate([
     (0, swagger_1.ApiTags)("Orders"),
     (0, common_1.Controller)("orders"),

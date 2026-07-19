@@ -12,7 +12,7 @@ export declare class VehiclesController {
             };
         } & {
             id: string;
-            status: import(".prisma/client").$Enums.UsageStatus;
+            status: import("@prisma/client").$Enums.UsageStatus;
             createdAt: Date;
             updatedAt: Date;
             notes: string | null;
@@ -23,13 +23,13 @@ export declare class VehiclesController {
             authorizedBy: string | null;
             purpose: string;
             destination: string | null;
-            expectedReturn: Date;
             checkoutAt: Date;
+            expectedReturn: Date;
             returnAt: Date | null;
         })[];
     } & {
         id: string;
-        status: import(".prisma/client").$Enums.VehicleStatus;
+        status: import("@prisma/client").$Enums.VehicleStatus;
         createdAt: Date;
         updatedAt: Date;
         notes: string | null;
@@ -39,11 +39,11 @@ export declare class VehiclesController {
         year: number;
         color: string | null;
         vin: string | null;
-        engineType: import(".prisma/client").$Enums.EngineType;
+        engineType: import("@prisma/client").$Enums.EngineType;
         engineCC: number | null;
         mileage: number | null;
-        fuelType: import(".prisma/client").$Enums.FuelType;
-        transmission: import(".prisma/client").$Enums.TransmissionType;
+        fuelType: import("@prisma/client").$Enums.FuelType;
+        transmission: import("@prisma/client").$Enums.TransmissionType;
         clientId: string;
         photos: string[];
     })[]>;
@@ -57,7 +57,7 @@ export declare class VehiclesController {
         };
     } & {
         id: string;
-        status: import(".prisma/client").$Enums.VehicleStatus;
+        status: import("@prisma/client").$Enums.VehicleStatus;
         createdAt: Date;
         updatedAt: Date;
         notes: string | null;
@@ -67,11 +67,11 @@ export declare class VehiclesController {
         year: number;
         color: string | null;
         vin: string | null;
-        engineType: import(".prisma/client").$Enums.EngineType;
+        engineType: import("@prisma/client").$Enums.EngineType;
         engineCC: number | null;
         mileage: number | null;
-        fuelType: import(".prisma/client").$Enums.FuelType;
-        transmission: import(".prisma/client").$Enums.TransmissionType;
+        fuelType: import("@prisma/client").$Enums.FuelType;
+        transmission: import("@prisma/client").$Enums.TransmissionType;
         clientId: string;
         photos: string[];
     }>;
@@ -83,7 +83,7 @@ export declare class VehiclesController {
         };
     } & {
         id: string;
-        status: import(".prisma/client").$Enums.VehicleStatus;
+        status: import("@prisma/client").$Enums.VehicleStatus;
         createdAt: Date;
         updatedAt: Date;
         notes: string | null;
@@ -93,11 +93,11 @@ export declare class VehiclesController {
         year: number;
         color: string | null;
         vin: string | null;
-        engineType: import(".prisma/client").$Enums.EngineType;
+        engineType: import("@prisma/client").$Enums.EngineType;
         engineCC: number | null;
         mileage: number | null;
-        fuelType: import(".prisma/client").$Enums.FuelType;
-        transmission: import(".prisma/client").$Enums.TransmissionType;
+        fuelType: import("@prisma/client").$Enums.FuelType;
+        transmission: import("@prisma/client").$Enums.TransmissionType;
         clientId: string;
         photos: string[];
     }>;

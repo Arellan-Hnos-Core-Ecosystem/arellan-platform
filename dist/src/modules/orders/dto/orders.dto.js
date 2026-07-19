@@ -9,7 +9,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.MechanicProgressDto = exports.CompleteWorkOrderDto = exports.DeliverOrderDto = exports.RejectQuoteDto = exports.ApproveQuoteDto = exports.SendQuoteDto = exports.CameraCaptureDto = exports.VehicleCheckinDto = exports.RequestPartsDto = exports.RequestPartsItemDto = exports.OrderFilterDto = exports.ApplyDiscountDto = exports.AssignMechanicDto = exports.UpdateStatusDto = exports.UpdateOrderDto = exports.CreateOrderDto = void 0;
+exports.MechanicProgressDto = exports.CompleteWorkOrderDto = exports.DeliverOrderDto = exports.RejectQuoteDto = exports.ApproveQuoteDto = exports.SendQuoteDto = exports.RequestCameraCaptureDto = exports.CameraCaptureDto = exports.VehicleCheckinDto = exports.RequestPartsDto = exports.RequestPartsItemDto = exports.OrderFilterDto = exports.ApplyDiscountDto = exports.AssignMechanicDto = exports.UpdateStatusDto = exports.UpdateOrderDto = exports.CreateOrderDto = void 0;
 const class_validator_1 = require("class-validator");
 const class_transformer_1 = require("class-transformer");
 const client_1 = require("@prisma/client");
@@ -129,6 +129,8 @@ class OrderFilterDto {
     to;
     limit;
     cursor;
+    page;
+    pageSize;
 }
 exports.OrderFilterDto = OrderFilterDto;
 __decorate([
@@ -170,6 +172,23 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], OrderFilterDto.prototype, "cursor", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ description: "Numero de pagina para paginacion offset (min 1)", example: 1, minimum: 1 }),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(1),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], OrderFilterDto.prototype, "page", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ description: "Resultados por pagina para paginacion offset (1-100)", example: 10, minimum: 1, maximum: 100 }),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(1),
+    (0, class_validator_1.Max)(100),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], OrderFilterDto.prototype, "pageSize", void 0);
 class RequestPartsItemDto {
     itemId;
     quantity;
@@ -273,6 +292,7 @@ __decorate([
     (0, swagger_1.ApiProperty)({ description: "Imagen capturada (snapshot ONVIF) en base64, sin prefijo data URI" }),
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.IsNotEmpty)(),
+    (0, class_validator_1.MaxLength)(8_000_000, { message: "La imagen excede el tamaño máximo permitido" }),
     __metadata("design:type", String)
 ], CameraCaptureDto.prototype, "imageBase64", void 0);
 __decorate([
@@ -281,6 +301,16 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CameraCaptureDto.prototype, "mimeType", void 0);
+class RequestCameraCaptureDto {
+    position;
+}
+exports.RequestCameraCaptureDto = RequestCameraCaptureDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({ description: "Posicion de check-in a capturar via camara ONVIF de bahia (Regla Anti-Fraude #8)", enum: ["FRONT", "BACK", "LEFT", "RIGHT", "DASHBOARD"], example: "FRONT" }),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsNotEmpty)(),
+    __metadata("design:type", String)
+], RequestCameraCaptureDto.prototype, "position", void 0);
 class SendQuoteDto {
     laborCost;
     partsCost;

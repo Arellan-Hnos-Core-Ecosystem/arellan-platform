@@ -26,27 +26,78 @@ let InventoryService = InventoryService_1 = class InventoryService {
         this.prisma = prisma;
         this.redis = redis;
     }
-    async findAll(category, lowStock, limit = 20, cursor) {
+    async findAll(category, lowStock, limit = 20, cursor, search, page, pageSize) {
         if (lowStock) {
             return this.findAllLowStock(category, limit, cursor);
         }
-        const cacheKey = `${CACHE_PREFIX}:catalog:${category ?? "all"}:${limit}:${cursor ?? "start"}`;
+        const where = {
+            ...(category ? { categoryId: category } : {}),
+            ...(search
+                ? {
+                    OR: [
+                        { name: { contains: search, mode: "insensitive" } },
+                        { sku: { contains: search, mode: "insensitive" } },
+                    ],
+                }
+                : {}),
+        };
+        if (page !== undefined || pageSize !== undefined) {
+            const size = Math.min(pageSize ?? 10, 100);
+            const currentPage = page ?? 1;
+            const offsetKey = `${CACHE_PREFIX}:catalog:offset:${category ?? "all"}:${search ?? "none"}:${currentPage}:${size}`;
+            const cachedOffset = await this.redis.get(offsetKey);
+            if (cachedOffset)
+                return JSON.parse(cachedOffset);
+            const [pagedItems, total] = await Promise.all([
+                this.prisma.inventoryItem.findMany({
+                    where,
+                    orderBy: { createdAt: "desc" },
+                    take: size,
+                    skip: (currentPage - 1) * size,
+                    include: { category: { select: { name: true } } },
+                }),
+                this.prisma.inventoryItem.count({ where }),
+            ]);
+            const offsetResult = {
+                data: pagedItems.map((i) => this.flattenItem(i)),
+                total,
+                page: currentPage,
+                pageSize: size,
+                totalPages: Math.ceil(total / size),
+            };
+            await this.redis.set(offsetKey, JSON.stringify(offsetResult), CATALOG_CACHE_TTL);
+            return offsetResult;
+        }
+        const cacheKey = `${CACHE_PREFIX}:catalog:${category ?? "all"}:${search ?? "none"}:${limit}:${cursor ?? "start"}`;
         const cached = await this.redis.get(cacheKey);
         if (cached)
             return JSON.parse(cached);
         const take = limit + 1;
         const items = await this.prisma.inventoryItem.findMany({
-            where: category ? { categoryId: category } : {},
+            where,
             orderBy: { createdAt: "desc" },
             take,
             ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+            include: { category: { select: { name: true } } },
         });
         const hasMore = items.length > limit;
-        const data = hasMore ? items.slice(0, limit) : items;
-        const nextCursor = hasMore ? data[data.length - 1].id : null;
+        const sliced = hasMore ? items.slice(0, limit) : items;
+        const data = sliced.map((i) => this.flattenItem(i));
+        const nextCursor = hasMore ? sliced[sliced.length - 1].id : null;
         const result = { data, nextCursor, hasMore };
         await this.redis.set(cacheKey, JSON.stringify(result), CATALOG_CACHE_TTL);
         return result;
+    }
+    flattenItem(i) {
+        return {
+            ...i,
+            code: i.sku,
+            currentStock: i.stock,
+            costPrice: Number(i.costPrice ?? 0),
+            salePrice: Number(i.unitPrice ?? 0),
+            category: i.category?.name ?? null,
+            categoryName: i.category?.name ?? "Sin categoría",
+        };
     }
     async findAllLowStock(category, limit = 20, cursor) {
         const cacheKey = `${CACHE_PREFIX}:lowstock:${category ?? "all"}:${limit}:${cursor ?? "start"}`;
@@ -62,10 +113,12 @@ let InventoryService = InventoryService_1 = class InventoryService {
             orderBy: { stock: "asc" },
             take,
             ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+            include: { category: { select: { name: true } } },
         });
         const hasMore = items.length > limit;
-        const data = hasMore ? items.slice(0, limit) : items;
-        const nextCursor = hasMore ? data[data.length - 1].id : null;
+        const sliced = hasMore ? items.slice(0, limit) : items;
+        const data = sliced.map((i) => this.flattenItem(i));
+        const nextCursor = hasMore ? sliced[sliced.length - 1].id : null;
         const result = { data, nextCursor, hasMore };
         await this.redis.set(cacheKey, JSON.stringify(result), CATALOG_CACHE_TTL);
         return result;
@@ -89,20 +142,48 @@ let InventoryService = InventoryService_1 = class InventoryService {
         if (existing) {
             throw new common_1.ConflictException("Ya existe un item con ese SKU");
         }
-        const item = await this.prisma.inventoryItem.create({
-            data: {
-                sku: dto.sku,
-                name: dto.name,
-                categoryId: dto.category,
-                costPrice: 0,
-                stock: dto.stock,
-                minStock: dto.minStock,
-                unitPrice: dto.unitPrice,
-            },
-        });
-        await this.invalidateCatalogCache();
-        this.logger.log(`Item creado: ${item.sku} (${item.id})`);
-        return item;
+        let categoryId = null;
+        if (dto.category) {
+            const byId = await this.prisma.category.findUnique({ where: { id: dto.category } });
+            if (byId) {
+                categoryId = byId.id;
+            }
+            else {
+                const byName = await this.prisma.category.upsert({
+                    where: { name: dto.category },
+                    update: {},
+                    create: { name: dto.category },
+                });
+                categoryId = byName.id;
+            }
+        }
+        try {
+            const item = await this.prisma.inventoryItem.create({
+                data: {
+                    sku: dto.sku,
+                    name: dto.name,
+                    categoryId,
+                    costPrice: 0,
+                    stock: dto.stock,
+                    minStock: dto.minStock,
+                    unitPrice: dto.unitPrice,
+                },
+            });
+            await this.invalidateCatalogCache();
+            this.logger.log(`Item creado: ${item.sku} (${item.id})`);
+            return item;
+        }
+        catch (err) {
+            if (err instanceof client_1.Prisma.PrismaClientKnownRequestError) {
+                if (err.code === "P2002") {
+                    throw new common_1.ConflictException("El SKU ya se encuentra registrado");
+                }
+                if (err.code === "P2003") {
+                    throw new common_1.BadRequestException("La categoría indicada no existe");
+                }
+            }
+            throw err;
+        }
     }
     async update(id, dto) {
         await this.findOne(id);
@@ -170,7 +251,7 @@ let InventoryService = InventoryService_1 = class InventoryService {
         ]);
         await this.redis.del(`${CACHE_PREFIX}:item:${itemId}`);
         await this.invalidateCatalogCache();
-        await this.redis.del(`${CACHE_PREFIX}:lowstock:*`);
+        await this.invalidateByPattern(`${CACHE_PREFIX}:lowstock:*`);
         await this.redis.del(`${CACHE_PREFIX}:valuation`);
         this.logger.log(`Movimiento ${dto.type} x${dto.quantity} en item ${item.sku}, stock: ${item.stock} -> ${newStock}`);
         return movement;
@@ -216,9 +297,11 @@ let InventoryService = InventoryService_1 = class InventoryService {
         const items = await this.prisma.inventoryItem.findMany({
             where: { stock: { lte: this.prisma.inventoryItem.fields.minStock } },
             orderBy: { stock: "asc" },
+            include: { category: { select: { name: true } } },
         });
-        await this.redis.set(cacheKey, JSON.stringify(items), 60);
-        return items;
+        const flattened = items.map((i) => this.flattenItem(i));
+        await this.redis.set(cacheKey, JSON.stringify(flattened), 60);
+        return flattened;
     }
     async getValuation() {
         const cacheKey = `${CACHE_PREFIX}:valuation`;
@@ -285,24 +368,27 @@ let InventoryService = InventoryService_1 = class InventoryService {
         });
         await this.redis.del(`${CACHE_PREFIX}:item:${itemId}`);
         await this.invalidateCatalogCache();
-        await this.redis.del(`${CACHE_PREFIX}:lowstock:*`);
+        await this.invalidateByPattern(`${CACHE_PREFIX}:lowstock:*`);
         await this.redis.del(`${CACHE_PREFIX}:critical`);
         await this.redis.del(`${CACHE_PREFIX}:valuation`);
         return result;
     }
     async invalidateCatalogCache() {
+        await this.invalidateByPattern(`${CACHE_PREFIX}:catalog:*`);
+    }
+    async invalidateByPattern(pattern) {
         try {
             const client = this.redis.client;
             let cursor = "0";
             do {
-                const [nextCursor, keys] = await client.scan(cursor, "MATCH", `${CACHE_PREFIX}:catalog:*`, "COUNT", 100);
+                const [nextCursor, keys] = await client.scan(cursor, "MATCH", pattern, "COUNT", 100);
                 cursor = nextCursor;
                 if (keys.length > 0)
                     await client.del(...keys);
             } while (cursor !== "0");
         }
         catch (err) {
-            this.logger.warn(`Cache invalidation warning: ${err.message}`);
+            this.logger.warn(`Cache invalidation warning (${pattern}): ${err.message}`);
         }
     }
 };

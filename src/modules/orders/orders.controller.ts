@@ -16,6 +16,11 @@ import { Roles } from "../../common/decorators/roles.decorator"
 import { CurrentUser } from "../../common/decorators/current-user.decorator"
 import { UserRole, OrderStatus } from "@prisma/client"
 
+// PERF-01: las fotos se persisten como base64 en PostgreSQL. Sin límite, una
+// carga multipart enorme infla filas/memoria/backups (DoS). 8MB/archivo cubre
+// de sobra una foto real de vehículo comprimida.
+const PHOTO_UPLOAD_LIMITS = { fileSize: 8 * 1024 * 1024 }
+
 @ApiTags("Orders")
 @Controller("orders")
 @UseGuards(JwtAuthGuard)
@@ -31,12 +36,18 @@ export class OrdersController {
   ) {}
 
   @Get()
+  // SEC-20: listar TODAS las OT es sólo para gestión. Los mecánicos usan
+  // GET /orders/my (sus OT asignadas). Antes esta ruta sólo tenía JwtAuthGuard,
+  // permitiendo a MECHANIC/TRAINEE enumerar todas las órdenes del taller.
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.FINANCE)
+  @UseGuards(RolesGuard)
   @ApiOperation({
-    summary: "Listar ordenes de trabajo",
-    description: "Listado paginado de todas las OT con filtros por estado, mecanico, rango de fechas, cursor. Incluye datos de vehiculo, cliente y mecanico asignado.",
+    summary: "Listar ordenes de trabajo (gestion)",
+    description: "Listado paginado de todas las OT con filtros por estado, mecanico, rango de fechas, cursor. Restringido a OWNER/ADMIN/FINANCE; los mecanicos usan GET /orders/my.",
   })
   @ApiResponse({ status: 200, description: "Listado paginado de ordenes" })
   @ApiResponse({ status: 401, description: "JWT invalido o expirado" })
+  @ApiResponse({ status: 403, description: "Solo OWNER, ADMIN o FINANCE" })
   findAll(@Query() filters: OrderFilterDto) {
     return this.ordersService.findAll(filters)
   }
@@ -84,8 +95,10 @@ export class OrdersController {
   @ApiResponse({ status: 200, description: "Detalle completo de la OT" })
   @ApiResponse({ status: 401, description: "JWT invalido" })
   @ApiResponse({ status: 404, description: "Orden no encontrada" })
-  findOne(@Param("id") id: string) {
-    return this.ordersService.findOne(id)
+  findOne(@Param("id") id: string, @CurrentUser() user: AuthUser) {
+    // SEC-20: control de propiedad — MECHANIC/TRAINEE sólo su OT asignada,
+    // CLIENT sólo la suya; gestión ve todo (resuelto en el servicio).
+    return this.ordersService.findOne(id, { id: user.id, role: user.role })
   }
 
   @Post()
@@ -167,7 +180,7 @@ export class OrdersController {
   @Post(":id/photos")
   @Roles(UserRole.MECHANIC, UserRole.TRAINEE, UserRole.ADMIN, UserRole.OWNER)
   @UseGuards(RolesGuard)
-  @UseInterceptors(FileInterceptor("photo"))
+  @UseInterceptors(FileInterceptor("photo", { limits: PHOTO_UPLOAD_LIMITS }))
   @ApiOperation({
     summary: "Subir foto a una orden de trabajo",
     description: "Adjunta una imagen (JPEG/PNG) a la OT. Usado por mecanicos desde la tablet para documentar el estado del vehiculo. Invalida cache de ordenes.",
@@ -328,7 +341,7 @@ export class OrdersController {
   @Post("checkin")
   @Roles(UserRole.MECHANIC, UserRole.TRAINEE, UserRole.ADMIN, UserRole.OWNER)
   @UseGuards(RolesGuard)
-  @UseInterceptors(DataMaskingInterceptor, FilesInterceptor("photos", 10))
+  @UseInterceptors(DataMaskingInterceptor, FilesInterceptor("photos", 10, { limits: PHOTO_UPLOAD_LIMITS }))
   @ApiOperation({
     summary: "Ingreso rapido de vehiculo al taller",
     description: "Crea o encuentra un vehiculo por placa y genera una OT nueva. Recibe fotos multipart del vehiculo. Usado desde la tablet por el mecanico al recibir un auto.",

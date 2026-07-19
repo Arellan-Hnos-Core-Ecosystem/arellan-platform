@@ -6,4 +6,6 @@ export declare class AuditFilterDto {
     to?: string;
     limit?: number;
     cursor?: string;
+    page?: number;
+    pageSize?: number;
 }

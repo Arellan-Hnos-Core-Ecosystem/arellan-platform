@@ -19,10 +19,10 @@ export declare class PaymentWebhookController {
             amount: import("@prisma/client/runtime/library").Decimal;
             workOrderId: string | null;
             invoiceId: string | null;
-            method: import(".prisma/client").$Enums.PaymentMethod;
+            method: import("@prisma/client").$Enums.PaymentMethod;
             reference: string | null;
             receivedBy: string;
-            channel: import(".prisma/client").$Enums.PaymentChannel;
+            channel: import("@prisma/client").$Enums.PaymentChannel;
             isPersonalYape: boolean;
             yapeAccount: string | null;
             receiptUrl: string | null;

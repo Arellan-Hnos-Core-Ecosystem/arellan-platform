@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.CloseCashboxSessionUseCase = void 0;
 const common_1 = require("@nestjs/common");
 const bullmq_1 = require("@nestjs/bullmq");
+const event_emitter_1 = require("@nestjs/event-emitter");
 const bullmq_2 = require("bullmq");
 const prisma_service_1 = require("../../../common/prisma/prisma.service");
 const realtime_gateway_1 = require("../../../common/gateway/realtime.gateway");
@@ -25,10 +26,12 @@ const DISCREPANCY_MAJOR = 50;
 let CloseCashboxSessionUseCase = class CloseCashboxSessionUseCase {
     prisma;
     wsGateway;
+    eventEmitter;
     alertQueue;
-    constructor(prisma, wsGateway, alertQueue) {
+    constructor(prisma, wsGateway, eventEmitter, alertQueue) {
         this.prisma = prisma;
         this.wsGateway = wsGateway;
+        this.eventEmitter = eventEmitter;
         this.alertQueue = alertQueue;
     }
     async execute(userId, params) {
@@ -111,6 +114,10 @@ let CloseCashboxSessionUseCase = class CloseCashboxSessionUseCase {
                 ...(newStatus !== "BLOCKED" ? { closedAt: new Date() } : {}),
             },
         });
+        if (newStatus !== "BLOCKED") {
+            this.eventEmitter.emit("cashbox.closed", { sessionId: session.id, status: newStatus });
+            this.wsGateway.emitCashboxClosed({ sessionId: session.id, status: newStatus, closedBy: userId });
+        }
         return {
             success: true,
             sessionId: session.id,
@@ -125,9 +132,10 @@ let CloseCashboxSessionUseCase = class CloseCashboxSessionUseCase {
 exports.CloseCashboxSessionUseCase = CloseCashboxSessionUseCase;
 exports.CloseCashboxSessionUseCase = CloseCashboxSessionUseCase = __decorate([
     (0, common_1.Injectable)(),
-    __param(2, (0, bullmq_1.InjectQueue)(queue_names_enum_1.QueueName.ALERT_DISPATCHER)),
+    __param(3, (0, bullmq_1.InjectQueue)(queue_names_enum_1.QueueName.ALERT_DISPATCHER)),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
         realtime_gateway_1.RealtimeGateway,
+        event_emitter_1.EventEmitter2,
         bullmq_2.Queue])
 ], CloseCashboxSessionUseCase);
 //# sourceMappingURL=close-cashbox-session.use-case.js.map

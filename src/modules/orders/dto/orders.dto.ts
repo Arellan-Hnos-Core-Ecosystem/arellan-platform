@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum, IsNumber, IsInt, IsDateString, IsUUID, Min, Max, IsArray, ValidateNested, Matches, IsIn, MinLength, IsNotEmpty } from "class-validator"
+import { IsString, IsOptional, IsEnum, IsNumber, IsInt, IsDateString, IsUUID, Min, Max, IsArray, ValidateNested, Matches, IsIn, MinLength, MaxLength, IsNotEmpty } from "class-validator"
 import { Type } from "class-transformer"
 import { OrderStatus } from "@prisma/client"
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger"
@@ -204,6 +204,10 @@ export class CameraCaptureDto {
   @ApiProperty({ description: "Imagen capturada (snapshot ONVIF) en base64, sin prefijo data URI" })
   @IsString()
   @IsNotEmpty()
+  // PERF-01: tope de tamaño (~6MB binarios). Las imágenes se guardan como
+  // data-URI base64 en PostgreSQL; sin límite, una carga masiva infla filas,
+  // memoria y backups. Un snapshot ONVIF real pesa muy por debajo de este tope.
+  @MaxLength(8_000_000, { message: "La imagen excede el tamaño máximo permitido" })
   imageBase64: string
 
   @ApiPropertyOptional({ description: "MIME type de la imagen", example: "image/jpeg" })

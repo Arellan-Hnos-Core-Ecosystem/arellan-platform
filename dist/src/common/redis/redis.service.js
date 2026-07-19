@@ -20,9 +20,21 @@ let RedisService = RedisService_1 = class RedisService {
     client;
     constructor(config) {
         this.config = config;
-        this.client = new ioredis_1.default(this.config.get("REDIS_URL", "redis://localhost:6379"), {
+        const redisUrl = this.config.get("REDIS_URL");
+        const connectionUrl = redisUrl
+            || `redis://${this.config.get("REDIS_HOST") || "redis"}:${this.config.get("REDIS_PORT") || "6379"}`;
+        this.client = new ioredis_1.default(connectionUrl, {
             maxRetriesPerRequest: null,
             enableReadyCheck: false,
+            retryStrategy: (times) => {
+                if (times > 20) {
+                    this.logger.error(`Redis unreachable after ${times} retries, giving up`);
+                    return null;
+                }
+                const delay = Math.min(times * 200, 5000);
+                this.logger.warn(`Redis connection retry ${times} in ${delay}ms`);
+                return delay;
+            },
         });
     }
     async onModuleInit() {

@@ -74,17 +74,17 @@ let FinanceController = class FinanceController {
             select: { mfaSecret: true, mfaEnabled: true },
         });
         if (!owner?.mfaEnabled || !owner?.mfaSecret) {
-            throw new Error("El OWNER no tiene MFA configurado. Configure Google Authenticator primero.");
+            throw new common_1.BadRequestException("El OWNER no tiene MFA configurado. Configure Google Authenticator primero.");
         }
         const isValid = authenticator.verify({ token: dto.totpCode, secret: owner.mfaSecret });
         if (!isValid) {
-            throw new Error("Código TOTP inválido o expirado.");
+            throw new common_1.BadRequestException("Código TOTP inválido o expirado.");
         }
         const session = await this.financeService["prisma"].cashboxSession.findUnique({
             where: { id: dto.sessionId },
         });
         if (!session || session.status !== "BLOCKED") {
-            throw new Error("La sesión de caja no existe o no está en estado BLOCKED.");
+            throw new common_1.BadRequestException("La sesión de caja no existe o no está en estado BLOCKED.");
         }
         const unblocked = await this.financeService["prisma"].cashboxSession.update({
             where: { id: dto.sessionId },

@@ -10,7 +10,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: config.get("JWT_ACCESS_SECRET") || "fallback-secret",
+      // SEC-02: sin fallback predecible. Si falta el secreto, el arranque falla
+      // (getOrThrow) en vez de aceptar tokens firmados con "fallback-secret".
+      secretOrKey: config.getOrThrow<string>("JWT_ACCESS_SECRET"),
     })
   }
 

@@ -275,38 +275,81 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     this.server.to("dashboard").emit("anomaly:detected", data)
   }
 
+  // ─── AUTORIZACIÓN DE SALAS (SEC-13) ────────────────────
+
+  // Identidad de la sesión del socket, poblada en handleConnection a partir del
+  // JWT verificado. NUNCA se confía en IDs/nombres provistos en el payload.
+  private getSocketUser(
+    client: Socket,
+  ): { userId: string; role: string; email?: string } | null {
+    const data = (client as any).data
+    if (!data?.userId || !data?.role) return null
+    return { userId: String(data.userId), role: String(data.role), email: data.email }
+  }
+
+  private static parseId(data: unknown, ...keys: string[]): string | undefined {
+    if (typeof data === "string") return data || undefined
+    if (typeof data === "object" && data !== null) {
+      for (const k of keys) {
+        const v = (data as Record<string, unknown>)[k]
+        if (typeof v === "string" && v) return v
+      }
+    }
+    return undefined
+  }
+
+  // ¿Puede este usuario acceder a esta OT?
+  // - OWNER/ADMIN/FINANCE: sí (paneles de gestión).
+  // - MECHANIC/TRAINEE: sólo su OT asignada.
+  // - CLIENT: sólo si la OT pertenece a su registro.
+  private async canAccessOrder(
+    user: { userId: string; role: string },
+    orderId: string,
+  ): Promise<boolean> {
+    if (["OWNER", "ADMIN", "FINANCE"].includes(user.role)) return true
+    const order = await this.prisma.workOrder.findUnique({
+      where: { id: orderId },
+      select: { mechanicId: true, clientId: true },
+    })
+    if (!order) return false
+    if (user.role === "MECHANIC" || user.role === "TRAINEE") return order.mechanicId === user.userId
+    if (user.role === "CLIENT") return order.clientId === user.userId
+    return false
+  }
+
   // ─── SUBSCRIBE MESSAGE HANDLERS ────────────────────────
 
   @SubscribeMessage("order:status-changed")
-  handleStatusChange(
-    @ConnectedSocket() _client: Socket,
+  async handleStatusChange(
+    @ConnectedSocket() client: Socket,
     @MessageBody() data: OrderUpdatePayload,
   ) {
-    this.broadcastOrderUpdate(data)
-    return { success: true, eventId: `evt-${Date.now()}` }
+    // SEC-13: los cambios de estado reales se emiten desde el backend (REST).
+    // Un cliente sólo puede re-emitir a la sala de una OT a la que tenga acceso;
+    // se prohíbe difundir al dashboard global desde el socket del cliente.
+    const user = this.getSocketUser(client)
+    if (!user) return { success: false, error: "No autenticado" }
+    const orderId = data?.orderId
+    if (!orderId) return { success: false, error: "orderId is required" }
+    if (!(await this.canAccessOrder(user, orderId))) {
+      return { success: false, error: "No autorizado para esta orden" }
+    }
+    this.server.to(`order:${orderId}`).emit("order:updated", data)
+    return { success: true }
   }
 
   @SubscribeMessage("order:subscribe")
-  handleSubscribe(
+  async handleSubscribe(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: unknown,
   ) {
-    let orderId: string | undefined
-
-    if (!data) {
-      return { success: false, error: "orderId is required" }
+    const user = this.getSocketUser(client)
+    if (!user) return { success: false, error: "No autenticado" }
+    const orderId = RealtimeGateway.parseId(data, "orderId", "id")
+    if (!orderId) return { success: false, error: "orderId is required" }
+    if (!(await this.canAccessOrder(user, orderId))) {
+      return { success: false, error: "No autorizado para esta orden" }
     }
-
-    if (typeof data === "string") {
-      orderId = data
-    } else if (typeof data === "object" && data !== null) {
-      orderId = (data as any).orderId || (data as any).id
-    }
-
-    if (!orderId) {
-      return { success: false, error: "orderId is required" }
-    }
-
     client.join(`order:${orderId}`)
     return { success: true, room: `order:${orderId}` }
   }
@@ -316,7 +359,7 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     @ConnectedSocket() client: Socket,
     @MessageBody() data: unknown,
   ) {
-    const orderId = typeof data === "string" ? data : (data as any)?.orderId || (data as any)?.id
+    const orderId = RealtimeGateway.parseId(data, "orderId", "id")
     if (!orderId) return { success: false, error: "orderId is required" }
     client.leave(`order:${orderId}`)
     return { success: true }
@@ -324,32 +367,67 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
 
   @SubscribeMessage("mechanic:progress")
   async handleMechanicProgress(
-    @ConnectedSocket() _client: Socket,
+    @ConnectedSocket() client: Socket,
     @MessageBody() data: MechanicProgressPayload,
   ) {
+    // SEC-13: identidad y autorización desde la sesión del socket, no del payload.
+    // Un mecánico sólo puede reportar avance de SU OT asignada.
+    const user = this.getSocketUser(client)
+    if (!user) return { success: false, error: "No autenticado" }
+    if (!["MECHANIC", "TRAINEE", "ADMIN", "OWNER"].includes(user.role)) {
+      return { success: false, error: "No autorizado" }
+    }
+    const orderId = data?.orderId
+    if (!orderId) return { success: false, error: "orderId is required" }
+
+    const order = await this.prisma.workOrder.findUnique({
+      where: { id: orderId },
+      select: { id: true, number: true, mechanicId: true },
+    })
+    if (!order) return { success: false, error: "Orden no encontrada" }
+    if ((user.role === "MECHANIC" || user.role === "TRAINEE") && order.mechanicId !== user.userId) {
+      return { success: false, error: "No autorizado para esta orden" }
+    }
+
+    // Nombre derivado del servidor (nunca del payload del cliente)
+    const account = await this.prisma.account.findUnique({
+      where: { id: user.userId },
+      select: { name: true },
+    })
+    const mechanicName = account?.name ?? user.email ?? "Mecánico"
+
+    // Saneado de valores numéricos entrantes
+    const progressPercent = Math.max(0, Math.min(100, Number(data?.progressPercent) || 0))
+    const partsInstalled = Math.max(0, Math.floor(Number(data?.partsInstalled) || 0))
+    const laborHours = Math.max(0, Number(data?.laborHours) || 0)
+    const notes = typeof data?.notes === "string" ? data.notes.slice(0, 1000) : undefined
+
     this.emitMechanicProgress({
-      ...data,
-      timestamp: data.timestamp || new Date().toISOString(),
+      orderId,
+      orderNumber: order.number,
+      mechanicId: user.userId,
+      mechanicName,
+      progressPercent,
+      currentStatus: "IN_PROGRESS",
+      partsInstalled,
+      laborHours,
+      notes,
+      timestamp: new Date().toISOString(),
     })
 
     try {
       await this.prisma.workOrderEvent.create({
         data: {
-          workOrderId: data.orderId,
+          workOrderId: orderId,
           event: "PROGRESS_REPORTED",
-          description: data.notes
-            ? `${data.mechanicName} registró avance técnico: ${data.notes} (${data.progressPercent}%)`
-            : `${data.mechanicName} reportó avance del ${data.progressPercent}% - ${data.partsInstalled} repuestos instalados, ${data.laborHours}h trabajadas`,
-          metadata: {
-            progressPercent: data.progressPercent,
-            partsInstalled: data.partsInstalled,
-            laborHours: data.laborHours,
-            notes: data.notes ?? null,
-          },
-          userId: data.mechanicId,
+          description: notes
+            ? `${mechanicName} registró avance técnico: ${notes} (${progressPercent}%)`
+            : `${mechanicName} reportó avance del ${progressPercent}% - ${partsInstalled} repuestos instalados, ${laborHours}h trabajadas`,
+          metadata: { progressPercent, partsInstalled, laborHours, notes: notes ?? null },
+          userId: user.userId,
         },
       })
-      this.logger.log(`Progreso WS persistido en DB: OT ${data.orderNumber || data.orderId} - ${data.mechanicName}`)
+      this.logger.log(`Progreso WS persistido en DB: OT ${order.number} - ${mechanicName}`)
     } catch (e) {
       this.logger.error(`Error al persistir progreso WS: ${(e as Error).message}`)
     }
@@ -362,8 +440,15 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     @ConnectedSocket() client: Socket,
     @MessageBody() data: unknown,
   ) {
-    const clientId = typeof data === "string" ? data : (data as any)?.clientId || (data as any)?.id
+    // SEC-13: sólo gestión, o el propio usuario para su sala.
+    const user = this.getSocketUser(client)
+    if (!user) return { success: false, error: "No autenticado" }
+    const clientId = RealtimeGateway.parseId(data, "clientId", "id")
     if (!clientId) return { success: false, error: "clientId is required" }
+    const isMgmt = ["OWNER", "ADMIN", "FINANCE"].includes(user.role)
+    if (!isMgmt && user.userId !== clientId) {
+      return { success: false, error: "No autorizado para esta sala de cliente" }
+    }
     client.join(`client:${clientId}`)
     return { success: true, room: `client:${clientId}` }
   }
@@ -373,7 +458,7 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     @ConnectedSocket() client: Socket,
     @MessageBody() data: unknown,
   ) {
-    const clientId = typeof data === "string" ? data : (data as any)?.clientId || (data as any)?.id
+    const clientId = RealtimeGateway.parseId(data, "clientId", "id")
     if (!clientId) return { success: false, error: "clientId is required" }
     client.leave(`client:${clientId}`)
     return { success: true }

@@ -7,26 +7,26 @@ export declare class AttendanceController {
         data: ({
             personnel: {
                 id: string;
-                firstName: string;
-                lastName: string;
-                position: string;
                 account: {
                     id: string;
                     email: string;
-                    role: import(".prisma/client").$Enums.UserRole;
+                    role: import("@prisma/client").$Enums.UserRole;
                 };
+                firstName: string;
+                lastName: string;
+                position: string;
             };
         } & {
             id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            notes: string | null;
+            type: import("@prisma/client").$Enums.AttendanceType;
             personnelId: string;
             date: Date;
             checkIn: Date | null;
             checkOut: Date | null;
-            type: import(".prisma/client").$Enums.AttendanceType;
-            notes: string | null;
             verifiedBy: string | null;
-            createdAt: Date;
-            updatedAt: Date;
         })[];
         total: number;
         page: number;
@@ -49,27 +49,27 @@ export declare class AttendanceController {
         };
     } & {
         id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        notes: string | null;
+        type: import("@prisma/client").$Enums.AttendanceType;
         personnelId: string;
         date: Date;
         checkIn: Date | null;
         checkOut: Date | null;
-        type: import(".prisma/client").$Enums.AttendanceType;
-        notes: string | null;
         verifiedBy: string | null;
-        createdAt: Date;
-        updatedAt: Date;
     })[]>;
     checkIn(dto: CheckInDto): Promise<{
         id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        notes: string | null;
+        type: import("@prisma/client").$Enums.AttendanceType;
         personnelId: string;
         date: Date;
         checkIn: Date | null;
         checkOut: Date | null;
-        type: import(".prisma/client").$Enums.AttendanceType;
-        notes: string | null;
         verifiedBy: string | null;
-        createdAt: Date;
-        updatedAt: Date;
     }>;
     checkOut(dto: CheckOutDto): Promise<{
         personnel: {
@@ -79,15 +79,15 @@ export declare class AttendanceController {
         };
     } & {
         id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        notes: string | null;
+        type: import("@prisma/client").$Enums.AttendanceType;
         personnelId: string;
         date: Date;
         checkIn: Date | null;
         checkOut: Date | null;
-        type: import(".prisma/client").$Enums.AttendanceType;
-        notes: string | null;
         verifiedBy: string | null;
-        createdAt: Date;
-        updatedAt: Date;
     }>;
     verify(dto: VerifyAttendanceDto): Promise<{
         personnel: {
@@ -97,14 +97,14 @@ export declare class AttendanceController {
         };
     } & {
         id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        notes: string | null;
+        type: import("@prisma/client").$Enums.AttendanceType;
         personnelId: string;
         date: Date;
         checkIn: Date | null;
         checkOut: Date | null;
-        type: import(".prisma/client").$Enums.AttendanceType;
-        notes: string | null;
         verifiedBy: string | null;
-        createdAt: Date;
-        updatedAt: Date;
     }>;
 }

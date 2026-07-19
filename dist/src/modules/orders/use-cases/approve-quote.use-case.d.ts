@@ -11,7 +11,7 @@ export declare class ApproveQuoteUseCase {
         success: boolean;
         orderId: string;
         orderNumber: string;
-        newStatus: import(".prisma/client").$Enums.OrderStatus;
+        newStatus: import("@prisma/client").$Enums.OrderStatus;
         quoteId: string;
         approvedAt: string;
     }>;

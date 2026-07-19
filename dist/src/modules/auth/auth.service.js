@@ -178,12 +178,32 @@ let AuthService = AuthService_1 = class AuthService {
         const isValid = await bcrypt.compare(dto.currentPassword, account.passwordHash);
         if (!isValid)
             throw new common_1.UnauthorizedException("Contrasena actual incorrecta");
+        if (await bcrypt.compare(dto.newPassword, account.passwordHash)) {
+            throw new common_1.UnauthorizedException("La nueva contrasena debe ser distinta a la actual");
+        }
         const passwordHash = await bcrypt.hash(dto.newPassword, 12);
         await this.prisma.account.update({
             where: { id: userId },
             data: { passwordHash },
         });
-        return { message: "Contrasena actualizada correctamente" };
+        await this.prisma.refreshToken.updateMany({
+            where: { accountId: userId, revoked: false },
+            data: { revoked: true },
+        });
+        await this.invalidateAllSessions(userId);
+        await this.prisma.auditLog.create({
+            data: {
+                userId,
+                userName: account.name,
+                role: account.role,
+                action: "PASSWORD_CHANGED",
+                entity: "Account",
+                entityId: userId,
+                severity: "WARNING",
+                ipAddress: "system",
+            },
+        });
+        return { message: "Contrasena actualizada correctamente. Vuelve a iniciar sesion." };
     }
     async refreshToken(refreshToken) {
         let payload;
@@ -318,12 +338,13 @@ let AuthService = AuthService_1 = class AuthService {
         return account;
     }
     async generateTokens(account, mfaVerified = false, ip, userAgent) {
+        const requiresMfa = ["OWNER", "ADMIN", "FINANCE"].includes(account.role);
         const payload = {
             id: account.id,
             email: account.email,
             role: account.role,
             name: account.name,
-            mfaVerified: mfaVerified || !account.mfaEnabled,
+            mfaVerified: mfaVerified || !requiresMfa,
         };
         const accessToken = this.jwt.sign(payload, {
             secret: this.config.get("JWT_ACCESS_SECRET"),
